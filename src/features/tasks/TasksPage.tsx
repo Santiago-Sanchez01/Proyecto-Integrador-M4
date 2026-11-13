@@ -1,5 +1,5 @@
 import PlaceholderPage from '../../components/PlaceholderPage'
 
 export default function TasksPage() {
-  return <PlaceholderPage title="Mis tareas" />
+  return <PlaceholderPage />
 }

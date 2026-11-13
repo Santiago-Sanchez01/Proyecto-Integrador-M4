@@ -6,7 +6,6 @@
 
 body {
   margin: 0;
-  padding: var(--space-4);
   min-width: 0;
   background: var(--color-background);
   color: var(--color-text);
@@ -30,10 +29,4 @@ a {
 
 h1, h2, h3, p {
   overflow-wrap: anywhere;
-}
-
-@media (min-width: 640px) {
-  body {
-    padding: var(--space-8);
-  }
 }

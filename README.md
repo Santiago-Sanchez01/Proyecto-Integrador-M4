@@ -52,9 +52,9 @@ Componentes en `src/components/ui/`:
 - `Card`: contenedor neutro con atributos nativos, sin rol interactivo implícito.
 
 La muestra temporal se abre desde “Ver componentes · Midnight Copper V2” al pie
-de cualquier página. No agrega rutas ni modifica los placeholders. El formulario
+de las páginas internas. No agrega rutas ni modifica los placeholders. El formulario
 solo demuestra validación local; no guarda ni envía datos. Para retirarla basta
-quitar `DesignSystemPreview` de `App.tsx` y eliminar sus archivos y prueba.
+quitar `DesignSystemPreview` de `AppLayout.tsx` y eliminar sus archivos y prueba.
 
 Se verificaron 12 pruebas, navegación con Tab/Enter/Espacio, foco visible y tamaños
 320, 375 y 1280 px en Chrome headless sin desbordamiento horizontal. La muestra
@@ -65,6 +65,27 @@ Contrastes calculados: texto principal sobre superficie 13,90:1; secundario
 8,87:1; texto oscuro sobre cobre 7,73:1; error sobre superficie 8,63:1. El borde
 de control tiene al menos 3,49:1 sobre las tres superficies. Los controles
 deshabilitados se distinguen por opacidad y no admiten interacción.
+
+## Hito 01.3B: layout y navegación
+
+`App.tsx` anida `/jornada`, `/tareas` y `/resumen` dentro de `AppLayout` mediante
+`Outlet`. Login, registro y página no encontrada quedan fuera de ese layout.
+`sections.ts` centraliza títulos, descripciones, destinos e identificadores de
+iconos. `AppNavigation` usa un único conjunto de `NavLink`, con `aria-current`,
+SVG decorativos y etiquetas visibles. `SectionHeader` muestra el encabezado y
+recibe el foco después de cambiar de sección. Los placeholders reutilizan Card.
+
+La navegación es inferior y fija por debajo de 1024 px; desde ese ancho pasa a
+una sidebar sticky de 256 px. El contenido reserva espacio inferior y safe area.
+Las áreas de los enlaces miden 64 px de alto en móvil y 48 px en escritorio.
+Hay un enlace para saltar al contenido, foco visible y movimiento reducido.
+
+Validación: typecheck, build, lint y 19 pruebas automatizadas correctas. En Chrome
+headless se comprobaron 320, 375, 768 y 1280 px, navegación entre las tres secciones,
+una única ruta activa, recarga de las rutas internas, teclado y salto al contenido.
+No hubo desbordamiento horizontal ni contenido final tapado por la navegación
+con la muestra de componentes desplegada. También se inspeccionaron capturas.
+Las recargas se verificaron en el servidor local de Vite; no en Vercel desplegado.
 
 ## Entornos y despliegue posterior
 

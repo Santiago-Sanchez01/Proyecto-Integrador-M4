@@ -1,12 +1,14 @@
+import Card from './ui/Card'
+
 type PlaceholderPageProps = {
-  title: string
+  title?: string
 }
 
 export default function PlaceholderPage({ title }: PlaceholderPageProps) {
   return (
-    <section>
-      <h1>{title}</h1>
+    <Card>
+      {title && <h1>{title}</h1>}
       <p>Esta sección se implementará en una próxima etapa.</p>
-    </section>
+    </Card>
   )
 }
