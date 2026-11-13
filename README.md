@@ -1,6 +1,6 @@
 # Workspace
 
-Aplicación de gestión individual de tareas. Hito 01.2: fundaciones técnicas.
+Aplicación de gestión individual de tareas con React, TypeScript y Firebase.
 
 ## Comandos
 
@@ -11,6 +11,7 @@ Aplicación de gestión individual de tareas. Hito 01.2: fundaciones técnicas.
 - `npm run lint`: ejecutar Oxlint.
 - `npm test`: ejecutar Vitest una vez.
 - `npm run test:watch`: ejecutar Vitest en modo interactivo.
+- `npm run test:rules`: ejecutar reglas e integraciones del servicio en el emulador.
 - `npm run preview`: servir el build localmente.
 
 ## Organización
@@ -24,7 +25,8 @@ Las rutas `/login` y `/register` tienen formularios conectados a Firebase Auth.
 `/jornada`, `/tareas` y `/resumen` siguen siendo placeholders, ahora protegidos.
 `/` redirige a `/jornada`. Las rutas desconocidas muestran una página no
 encontrada. La integración requiere configurar el proyecto Firebase (ver Hito 01.4B).
-Todavía no existe persistencia de tareas.
+La persistencia de tareas está disponible mediante un servicio y `useTasks`;
+todavía no está conectada a los placeholders ni existe su interfaz definitiva.
 
 ## Alcance acordado del MVP
 
@@ -33,7 +35,7 @@ Todavía no existe persistencia de tareas.
   `focusTaskId` en `users/{uid}`.
 - Resumen del estado actual de todas las tareas, sin filtros temporales.
 - Sin vencimientos, zonas horarias, prioridades ni colaboración.
-- El CRUD de tareas, Vercel Functions y AWS SES quedan para otros hitos.
+- La interfaz de tareas, Vercel Functions y AWS SES quedan para otros hitos.
 
 ## Hito 01.3A: Midnight Copper V2
 
@@ -304,12 +306,11 @@ emulador de la librería de pruebas.
 `vitest.rules.config.ts` y las pruebas de seguridad están incluidas en el chequeo
 TypeScript. No confundir aprobar los tests de aplicación con aprobar las reglas.
 
-**Resultado de esta intervención:** typecheck, build y lint correctos; 59 pruebas
-de aplicación aprobadas (los 58 casos existentes y uno nuevo para el cliente
-Firestore compartido). `npm run test:rules` se intentó y falló antes de ejecutar
-la suite con `spawn java ENOENT`: Java no está disponible en este equipo. Las
-reglas todavía no tienen validación de ejecución; hay que instalar JDK 21+, abrir
-una terminal nueva y repetir el comando antes de aprobarlas para producción.
+**Validación actualizada:** las 57 pruebas de reglas pasan en el emulador con
+Temurin JDK 21. El problema inicial `spawn java ENOENT` se resolvió proporcionando
+JAVA_HOME y PATH temporalmente al proceso. El usuario confirmó la publicación
+de las reglas en `workspace-m4` antes de comenzar el Hito 02.2. Las pruebas del
+Hito 02.2 se detallan más abajo; en esta intervención no se cambiaron las reglas.
 
 La auditoría de dependencias de producción informa 0 vulnerabilidades. Permanecen
 13 avisos moderados transitivos de las herramientas de desarrollo, principalmente
@@ -320,9 +321,10 @@ Revisarlos al actualizar la herramienta. Estos paquetes no se importan en la SPA
 ### Publicación manual, únicamente después de revisión
 
 Las reglas en el repositorio no reemplazan las de Firebase Console automáticamente.
-No se desplegó ninguna regla ni se escribió en Firestore de producción.
+El usuario informó su despliegue al cerrar 02.1. Los cambios futuros siguen
+requiriendo revisión y aprobación; no se desplegó nada durante el Hito 02.2.
 
-Antes del Hito 02.2:
+Para futuras publicaciones:
 
 1. Ejecutar y aprobar la suite de seguridad con el emulador y revisar las reglas.
 2. Confirmar que la base creada es la base `(default)` del proyecto `workspace-m4`.
@@ -334,7 +336,7 @@ npx firebase login
 npx firebase deploy --only firestore:rules --project workspace-m4
 ```
 
-Esos comandos son documentación; no se ejecutaron. El flag limita el despliegue
+Esos comandos son documentación; no se ejecutaron en esta intervención. El flag limita el despliegue
 a las reglas y selecciona el proyecto de forma explícita. No se configuró un alias
 de producción por defecto ni un script automático de despliegue.
 
@@ -346,6 +348,118 @@ La configuración web `VITE_*` es pública y no autoriza el acceso a datos.
 Referencias: [pruebas de reglas con emulador](https://firebase.google.com/docs/firestore/security/test-rules-emulator),
 [String.trim en reglas](https://firebase.google.com/docs/reference/rules/rules.String#trim)
 y [Emulator Suite](https://firebase.google.com/docs/emulator-suite/install_and_configure).
+
+## Hito 02.2: servicio de tareas y lógica React
+
+No se cambiaron pantallas, reglas, `.env.local` ni dependencias. No se implementó
+focusTaskId, email ni funciones serverless. Los placeholders siguen vigentes.
+
+### Servicio de sesión
+
+`src/features/tasks/tasks.service.ts` expone `createTasksService()`. Esta función
+obtiene el usuario real de Firebase Auth y liga el servicio a su UID. No acepta un
+UID ni una ruta proporcionados por el consumidor. Rechaza el uso sin sesión, las
+operaciones de un servicio antiguo tras cambiar de cuenta y los resultados de
+consultas/escrituras que terminan cuando ya cambió la sesión. Las reglas siguen
+siendo la autorización efectiva en servidor.
+
+Operaciones disponibles:
+
+- `createTask({ title, description })`: valida y recorta ambos textos, crea estado
+  pending y ambas fechas con `serverTimestamp()`. Devuelve el ID tras confirmación.
+- `getTasks()`: consulta puntual al servidor de la subcolección propia.
+- `subscribeTasks(onChange, onError)`: listener en tiempo real; devuelve unsubscribe.
+- `updateTask(id, { title, description })`: edita solo contenido y updatedAt.
+- `setTaskStatus(id, status)`: cambia pending/completed y updatedAt.
+- `deleteTask(id)`: elimina el documento en la ruta propia. Como en Firestore,
+  eliminar un documento propio inexistente es una operación idempotente.
+
+Las actualizaciones nunca incluyen createdAt. Los payloads se construyen con una
+lista explícita de campos; el ID de tarea no puede contener `/`. Las escrituras
+esperan las promesas del SDK y propagan sus errores. El contrato de creación se
+comprueba también mediante `WithFieldValue<TaskDocument>`. `TaskContent` representa
+los dos campos editables. La deserialización valida estado, textos y timestamps
+en lugar de convertir datos desconocidos mediante un cast a Task.
+
+### Consulta y snapshots
+
+Se ordena por createdAt descendente y, ante empates, por ID descendente. No hay
+filtros ni paginación. En Standard, esta consulta utiliza el índice automático
+descendente de createdAt y su desempate por nombre; no se agregó un índice
+compuesto. Si se deshabilitó ese índice en la consola, debe restaurarse. Las
+consultas con orderBy no incluyen documentos sin createdAt, que serían inválidos
+según el contrato publicado.
+
+El listener solicita `includeMetadataChanges: true` y omite snapshots con
+`hasPendingWrites`. Así se conservan Timestamp confirmados y no se presenta una
+escritura local como resultado confirmado. Puede emitir datos válidos de caché
+sin escrituras pendientes y luego datos actualizados del servidor. La consulta
+puntual usa `getDocsFromServer`, falla sin conexión y rechaza overlays pendientes.
+
+Se escucha toda la colección propia, adecuado para el MVP académico. Cada montaje
+de `useTasks` abre un listener: evitar montarlo simultáneamente en muchos componentes
+para no duplicar lecturas. Al crecer el volumen, evaluar paginación y compartir la
+suscripción. [Detalles oficiales de listeners](https://firebase.google.com/docs/firestore/query-data/listen)
+y [orden de índices](https://firebase.google.com/docs/firestore/query-data/index-overview).
+
+### Hook useTasks
+
+`useTasks()` obtiene el usuario desde useAuth y expone:
+
+- `tasks`, `loading`, `error` de la suscripción.
+- `isMutating` y `operationError` independientes del error de lectura.
+- `createTask`, `updateTask`, `setTaskStatus`, `deleteTask` (promesas).
+
+Loading permanece activo hasta el primer snapshot aceptado; sin sesión devuelve
+una lista vacía. El cambio de UID oculta y reinicia los datos durante el render,
+antes del cleanup pasivo. Cada listener y operación pendiente queda ligado a su
+sesión; los callbacks tardíos se ignoran, incluidas las respuestas que llegan entre
+el cambio de cuenta y la limpieza del efecto. El desmontaje desuscribe y evita
+actualizar estado. También funciona con StrictMode.
+
+Las operaciones no modifican tasks de forma optimista: el listener es la única
+fuente del listado. Un contador conserva isMutating mientras existan operaciones
+concurrentes. Los errores se traducen con `tasks.errors.ts`, se exponen y vuelven
+a rechazarse para que la futura interfaz pueda manejarlos. Esa interfaz deberá
+capturar los rechazos y deshabilitar las acciones que no deba repetir. Si el SDK
+termina un listener por error, se requiere un nuevo montaje para reintentarlo.
+
+Una escritura ya enviada no puede cancelarse al desmontar o cerrar sesión: puede
+completarse para la cuenta original, sujeta a las reglas. El hook descarta su
+resultado para la nueva sesión. Sin conexión, las escrituras pueden quedar
+pendientes hasta que el SDK las confirme o rechace; no se simula un timeout ni
+se afirma éxito. Los errores de operación persisten hasta la próxima operación.
+
+### Verificación del Hito 02.2
+
+Las pruebas unitarias del servicio usan dobles del SDK y las del hook verifican
+snapshots, operaciones, errores, concurrencia, desmontaje, cambio de usuario y
+callbacks anteriores al cleanup. Las tres integraciones nuevas usan el servicio
+real y el SDK cliente contra el emulador, con identidades simuladas por
+rules-unit-testing: ciclo CRUD completo, realtime/orden y aislamiento entre cuentas.
+También se repiten las 57 pruebas de reglas existentes sin modificarlas.
+
+Resultado final: `npm run typecheck`, `npm run build` y `npm run lint` correctos;
+`npm test`: **90 pruebas aprobadas**; `npm run test:rules`: **60 aprobadas**
+(57 de reglas y 3 integraciones nuevas). Sin fallos automatizados pendientes.
+
+En PowerShell, si la terminal no hereda la instalación de Java:
+
+```powershell
+$env:JAVA_HOME = 'C:\ruta\al\jdk-21'
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+java -version
+npm.cmd run test:rules
+```
+
+Solo modifica el entorno de ese proceso; no reinstala Java ni cambia el sistema.
+`tsconfig.node.json` usa resolución bundler para comprobar las integraciones que
+importan el servicio de Vite. Las pruebas del emulador no cargan `.env.local`.
+
+Pendientes manuales para la próxima interfaz: conectar useTasks, comprobar estados
+de carga y errores visibles, verificar las acciones con una cuenta propia y
+revisar el índice automático de createdAt en producción si devuelve un error de
+precondición. En esta etapa no se escribieron datos de prueba en producción.
 
 ## Entornos y despliegue posterior
 

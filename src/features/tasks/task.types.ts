@@ -15,3 +15,5 @@ export interface TaskDocument {
 export interface Task extends TaskDocument {
   id: string
 }
+
+export type TaskContent = Pick<TaskDocument, 'title' | 'description'>
