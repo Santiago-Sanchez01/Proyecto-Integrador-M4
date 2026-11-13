@@ -33,7 +33,7 @@ Todavía no existe persistencia de tareas.
   `focusTaskId` en `users/{uid}`.
 - Resumen del estado actual de todas las tareas, sin filtros temporales.
 - Sin vencimientos, zonas horarias, prioridades ni colaboración.
-- Firestore, Vercel Functions y AWS SES quedan para otros hitos.
+- El CRUD de tareas, Vercel Functions y AWS SES quedan para otros hitos.
 
 ## Hito 01.3A: Midnight Copper V2
 
@@ -211,12 +211,141 @@ Para repetir las comprobaciones manualmente:
 - Login incorrecto: mensaje genérico y botón habilitado para reintentar.
 - Login correcto: entra al destino interno solicitado.
 
-La protección del router es de UX; cuando se implemente Firestore, el aislamiento
-entre usuarios requerirá reglas de seguridad. No se implementó Firestore.
+La protección del router es de UX; el aislamiento de Firestore depende de reglas
+de seguridad, preparadas en el Hito 02.1 y pendientes de revisión y publicación.
 
 Referencias oficiales: [cuentas con contraseña](https://firebase.google.com/docs/auth/web/password-auth),
 [observador de sesión](https://firebase.google.com/docs/auth/web/manage-users) y
 [persistencia](https://firebase.google.com/docs/auth/web/auth-state-persistence).
+
+## Hito 02.1: infraestructura de Cloud Firestore
+
+No se implementaron operaciones CRUD ni se modificaron las pantallas internas.
+`src/lib/firebase.ts` ahora expone `getFirebaseApp()`, que reutiliza la aplicación
+por defecto existente. Auth y `src/lib/firestore.ts` usan esa misma app. El cliente
+Firestore es lazy: no lee ni escribe documentos al importarlo. No hay variables
+nuevas, Analytics, Admin SDK ni cambios en `.env.local`.
+
+### Contratos y estructura de datos
+
+Ruta: `users/{uid}/tasks/{taskId}`. El UID proviene de Firebase Authentication;
+no se duplica como campo de la tarea. No es necesario crear `users/{uid}` para
+que exista su subcolección de tareas.
+
+`src/features/tasks/task.types.ts` define:
+
+| Campo persistido | Tipo | Restricción |
+| --- | --- | --- |
+| `title` | `string` | Obligatorio, no vacío después de `trim()` |
+| `description` | `string` | Obligatorio, no vacío después de `trim()` |
+| `status` | `'pending' \| 'completed'` | Sin otros estados |
+| `createdAt` | Firebase `Timestamp` | Fecha de servidor, inmutable |
+| `updatedAt` | Firebase `Timestamp` | Fecha de servidor en cada escritura |
+
+`TaskDocument` representa esos cinco campos. `Task` agrega `id: string` para
+React, obtenido del identificador del documento; `id` no se guarda en Firestore.
+Ambos modelos conservan Timestamp y su precisión; las vistas futuras podrán
+usar `toDate()` para presentar fechas. La obligatoriedad de texto no vacío se
+valida en las reglas; TypeScript por sí solo no garantiza ese contenido.
+No hay prioridades, vencimientos, etiquetas, responsables ni colaboración.
+
+### Reglas preparadas (no desplegadas)
+
+`firestore.rules` deniega todas las rutas salvo las tareas del propietario
+autenticado. Se separan get/list, create, update y delete. No permite operaciones
+sobre otro UID ni consultas generales de tareas de todos los usuarios.
+
+- Create exige exactamente los cinco campos, tipos válidos y ambas fechas iguales
+  a `request.time`. El futuro CRUD deberá enviar `serverTimestamp()` en ambas.
+- Update valida el documento completo resultante, conserva `createdAt` y exige
+  `updatedAt == request.time`. Las actualizaciones parciales también deben enviar
+  `updatedAt: serverTimestamp()`.
+- El contrato también exige `updatedAt >= createdAt`. En create la igualdad con
+  `request.time` ya lo garantiza; en update cubre documentos importados mediante
+  consola/Admin con una fecha de creación futura, que no pasan por estas reglas.
+  Se agregó una prueba de ese caso y se comprueba que el rechazo no modifica el
+  documento. Corregir datos importados inconsistentes requiere una acción
+  administrativa revisada; no se habilita cambiar `createdAt` desde el cliente.
+- Title y description deben ser strings con `trim().size() > 0`; status debe ser
+  uno de los dos strings permitidos. No se aceptan campos extra ni `id` persistido.
+- Delete solo exige propiedad; no depende de la validez del documento existente.
+- `users/{uid}` permanece cerrado. Su espacio está reservado para un contrato
+  futuro de `focusTaskId`, sin permitirlo ni crear perfiles en este hito.
+
+### Pruebas de seguridad aisladas
+
+Dependencias de desarrollo: `@firebase/rules-unit-testing` 6 y `firebase-tools` 15.
+La librería de reglas es compatible con el Firebase 13 instalado. El CLI instalado
+requiere **JDK 21 o superior**, disponible en PATH (`java -version`) o JAVA_HOME.
+No se requiere iniciar sesión en Firebase para ejecutar el emulador de este proyecto demo.
+
+Desde `workspace/`:
+
+```sh
+npm install
+npm run test:rules
+```
+
+El script inicia solo Firestore en `127.0.0.1:8080` con el proyecto ficticio
+`demo-workspace-m4`, carga las reglas locales, ejecuta Vitest y apaga el emulador.
+El CLI puede descargar el binario del emulador la primera vez; necesita conexión.
+No usa `workspace-m4` ni las variables de `.env.local`. La configuración de Vitest
+de reglas deshabilita la carga de archivos de entorno. La suite exige explícitamente
+`FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` y nunca cae a un endpoint de producción.
+
+`tests/firestore/firestore.rules.test.ts` prepara datos exclusivamente en el emulador
+y los limpia entre casos. Cubre operaciones del propietario, rechazo de otro usuario
+y anónimos, campos vacíos o incorrectos, campos extra y ausentes, timestamps
+manipulados, inmutabilidad de createdAt, perfiles cerrados y denegación por defecto.
+Las excepciones a reglas para preparar fixtures solo existen en el contexto del
+emulador de la librería de pruebas.
+
+`npm test` conserva la suite de aplicación y no inicia la suite de reglas.
+`vitest.rules.config.ts` y las pruebas de seguridad están incluidas en el chequeo
+TypeScript. No confundir aprobar los tests de aplicación con aprobar las reglas.
+
+**Resultado de esta intervención:** typecheck, build y lint correctos; 59 pruebas
+de aplicación aprobadas (los 58 casos existentes y uno nuevo para el cliente
+Firestore compartido). `npm run test:rules` se intentó y falló antes de ejecutar
+la suite con `spawn java ENOENT`: Java no está disponible en este equipo. Las
+reglas todavía no tienen validación de ejecución; hay que instalar JDK 21+, abrir
+una terminal nueva y repetir el comando antes de aprobarlas para producción.
+
+La auditoría de dependencias de producción informa 0 vulnerabilidades. Permanecen
+13 avisos moderados transitivos de las herramientas de desarrollo, principalmente
+Firebase CLI. Se aplicaron correcciones compatibles con `npm audit fix`; no se
+forzaron downgrades mayores ni overrides adicionales para ocultar los avisos.
+Revisarlos al actualizar la herramienta. Estos paquetes no se importan en la SPA.
+
+### Publicación manual, únicamente después de revisión
+
+Las reglas en el repositorio no reemplazan las de Firebase Console automáticamente.
+No se desplegó ninguna regla ni se escribió en Firestore de producción.
+
+Antes del Hito 02.2:
+
+1. Ejecutar y aprobar la suite de seguridad con el emulador y revisar las reglas.
+2. Confirmar que la base creada es la base `(default)` del proyecto `workspace-m4`.
+3. Obtener aprobación explícita para publicar las reglas revisadas.
+4. Solo entonces, con la cuenta Firebase correcta autenticada en CLI, ejecutar:
+
+```sh
+npx firebase login
+npx firebase deploy --only firestore:rules --project workspace-m4
+```
+
+Esos comandos son documentación; no se ejecutaron. El flag limita el despliegue
+a las reglas y selecciona el proyecto de forma explícita. No se configuró un alias
+de producción por defecto ni un script automático de despliegue.
+
+No utilizar claves Admin ni cuentas de servicio en el navegador o las pruebas.
+Las bibliotecas servidor/Admin pueden omitir las reglas, por lo que no sustituyen
+las pruebas de acceso con el SDK cliente. No usar producción para fixtures.
+La configuración web `VITE_*` es pública y no autoriza el acceso a datos.
+
+Referencias: [pruebas de reglas con emulador](https://firebase.google.com/docs/firestore/security/test-rules-emulator),
+[String.trim en reglas](https://firebase.google.com/docs/reference/rules/rules.String#trim)
+y [Emulator Suite](https://firebase.google.com/docs/emulator-suite/install_and_configure).
 
 ## Entornos y despliegue posterior
 

@@ -1,7 +1,7 @@
 import { getApp, getApps, initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
 
-export function getFirebaseAuth() {
+export function getFirebaseApp() {
   const options = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY?.trim(),
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim(),
@@ -11,7 +11,10 @@ export function getFirebaseAuth() {
   if (Object.values(options).some(value => !value)) {
     throw Object.assign(new Error('Firebase web configuration is missing.'), { code: 'auth/configuration-missing' })
   }
-  const app = getApps().some(app => app.name === '[DEFAULT]') ? getApp() : initializeApp(options)
+  return getApps().some(app => app.name === '[DEFAULT]') ? getApp() : initializeApp(options)
+}
+
+export function getFirebaseAuth() {
   // Firebase manages local session persistence and restoration; never store passwords.
-  return getAuth(app)
+  return getAuth(getFirebaseApp())
 }
