@@ -1,5 +1,5 @@
-import PlaceholderPage from '../../components/PlaceholderPage'
+import AuthForm from './AuthForm'
 
 export default function LoginPage() {
-  return <PlaceholderPage title="Iniciar sesión" />
+  return <AuthForm key="login" mode="login" />
 }

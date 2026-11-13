@@ -4,6 +4,7 @@ import SectionHeader from './SectionHeader'
 import DesignSystemPreview from './DesignSystemPreview'
 import { sections } from './sections'
 import './AppLayout.css'
+import LogoutButton from '../features/auth/LogoutButton'
 
 export default function AppLayout() {
   const { pathname } = useLocation()
@@ -15,6 +16,7 @@ export default function AppLayout() {
       <AppNavigation />
       <main id="main-content" className="app-content" tabIndex={-1}>
         <SectionHeader title={section.title} description={section.description} />
+        <LogoutButton />
         <Outlet />
         <DesignSystemPreview />
       </main>

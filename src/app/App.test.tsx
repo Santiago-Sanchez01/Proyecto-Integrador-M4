@@ -1,8 +1,22 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { observeSession } from '../features/auth/auth.service'
+
+vi.mock('../features/auth/auth.service', () => ({ observeSession: vi.fn(), login: vi.fn(), register: vi.fn(), logout: vi.fn() }))
+
+beforeEach(() => {
+  vi.mocked(observeSession).mockImplementation(onChange => {
+    onChange({ uid: 'test-user', email: 'persona@example.com' })
+    return vi.fn()
+  })
+})
+
+function anonymousSession() {
+  vi.mocked(observeSession).mockImplementation(onChange => { onChange(null); return vi.fn() })
+}
 
 describe('Navegación provisional', () => {
   it('redirige el inicio a Mi Jornada y permite navegar a Mis tareas', async () => {
@@ -19,6 +33,7 @@ describe('Navegación provisional', () => {
   })
 
   it.each(['/login', '/register'])('mantiene %s fuera del layout interno', (path) => {
+    anonymousSession()
     render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
     expect(screen.queryByRole('navigation', { name: 'Secciones de Workspace' })).not.toBeInTheDocument()
     expect(screen.queryByText('Saltar al contenido')).not.toBeInTheDocument()
@@ -61,6 +76,7 @@ describe('Navegación provisional', () => {
     ['/resumen', 'Mi resumen'],
     ['/desconocida', 'Página no encontrada'],
   ])('renderiza la ruta %s', (path, title) => {
+    if (path === '/login' || path === '/register') anonymousSession()
     render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
     expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
   })

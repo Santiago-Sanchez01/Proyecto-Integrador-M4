@@ -1,0 +1,21 @@
+.session-status {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.session-actions {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.session-actions p {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}

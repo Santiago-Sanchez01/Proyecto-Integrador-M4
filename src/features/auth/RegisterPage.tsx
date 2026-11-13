@@ -1,5 +1,5 @@
-import PlaceholderPage from '../../components/PlaceholderPage'
+import AuthForm from './AuthForm'
 
 export default function RegisterPage() {
-  return <PlaceholderPage title="Crear cuenta" />
+  return <AuthForm key="register" mode="register" />
 }
