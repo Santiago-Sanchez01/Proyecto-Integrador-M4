@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Local environments and credentials
+.env
+.env.*
+!.env.example
+.vercel/
+*.pem
+*.key
+*service-account*.json
+*serviceAccount*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

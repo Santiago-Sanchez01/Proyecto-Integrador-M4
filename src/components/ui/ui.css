@@ -1,0 +1,104 @@
+.ui-button {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.ui-button--primary {
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+}
+
+.ui-button--secondary {
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-color: var(--color-control-border);
+}
+
+.ui-button--danger {
+  color: var(--color-danger);
+  background: var(--color-surface);
+  border-color: var(--color-danger);
+}
+
+@media (hover: hover) {
+  .ui-button--primary:hover:not(:disabled) {
+    background: var(--color-text);
+  }
+
+  .ui-button--secondary:hover:not(:disabled),
+  .ui-button--danger:hover:not(:disabled) {
+    background: var(--color-surface-raised);
+  }
+}
+
+.ui-button:disabled, .ui-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ui-field {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ui-field label {
+  overflow-wrap: anywhere;
+}
+
+.ui-control {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-3);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  transition: border-color var(--transition-fast);
+}
+
+.ui-control::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 1;
+}
+
+.ui-control:hover:not(:disabled) {
+  border-color: var(--color-text-secondary);
+}
+
+.ui-control[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+textarea.ui-control {
+  resize: vertical;
+}
+
+.ui-help, .ui-error {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.ui-help {
+  color: var(--color-text-secondary);
+}
+
+.ui-error {
+  color: var(--color-danger);
+}
+
+.ui-card {
+  min-width: 0;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}

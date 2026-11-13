@@ -1,0 +1,34 @@
+:root {
+  color-scheme: dark;
+  --color-background: #0B1420;
+  --color-surface: #152231;
+  --color-surface-raised: #1F3342;
+  --color-accent: #D99A68;
+  --color-text: #F5EDE6;
+  --color-text-secondary: #B6C2CC;
+  --color-border: #2A3F4F;
+  --color-success: #22C55E;
+  /* Functional additions: error text and visible control boundaries. */
+  --color-danger: #FFA6A6;
+  --color-control-border: #718797;
+  --color-on-accent: var(--color-background);
+  --color-focus: var(--color-accent);
+  --font-family: Inter, system-ui, sans-serif;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-control: 12px;
+  --radius-card: 16px;
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: 0ms;
+    --transition-normal: 0ms;
+  }
+}
