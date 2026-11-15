@@ -9,6 +9,7 @@ import type { SessionUser } from './auth.service'
 import { authDestination } from './auth.destination'
 
 vi.mock('./auth.service', () => ({ observeSession: vi.fn(), login: vi.fn(), register: vi.fn(), logout: vi.fn() }))
+vi.mock('../tasks/useTasks', () => ({ useTasks: () => ({ tasks: [], loading: false, error: null }) }))
 
 const userSession = { uid: 'test-user', email: 'persona@example.com' }
 let sessionChanged: (user: SessionUser | null) => void

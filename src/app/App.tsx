@@ -1,14 +1,16 @@
+import { lazy, Suspense } from 'react'
 import { Link, Navigate, Route, Routes } from 'react-router'
 import LoginPage from '../features/auth/LoginPage'
 import RegisterPage from '../features/auth/RegisterPage'
 import JornadaPage from '../features/jornada/JornadaPage'
-import TasksPage from '../features/tasks/TasksPage'
 import SummaryPage from '../features/summary/SummaryPage'
 import AppLayout from './AppLayout'
 import AuthLayout from '../features/auth/AuthLayout'
 import AuthProvider from '../features/auth/AuthProvider'
 import ProtectedRoute from './ProtectedRoute'
 import GuestRoute from '../features/auth/GuestRoute'
+
+const TasksPage = lazy(() => import('../features/tasks/TasksPage'))
 
 export default function App() {
   return (
@@ -18,7 +20,7 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/jornada" element={<JornadaPage />} />
-            <Route path="/tareas" element={<TasksPage />} />
+            <Route path="/tareas" element={<Suspense fallback={<p role="status">Cargando tus tareas…</p>}><TasksPage /></Suspense>} />
             <Route path="/resumen" element={<SummaryPage />} />
           </Route>
         </Route>

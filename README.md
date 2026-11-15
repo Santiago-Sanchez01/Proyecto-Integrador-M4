@@ -22,11 +22,12 @@ Aplicación de gestión individual de tareas con React, TypeScript y Firebase.
 - `src/test/setup.ts`: jest-dom y limpieza del DOM entre pruebas.
 
 Las rutas `/login` y `/register` tienen formularios conectados a Firebase Auth.
-`/jornada`, `/tareas` y `/resumen` siguen siendo placeholders, ahora protegidos.
+`/tareas` muestra el listado de solo lectura con filtros; `/jornada` y `/resumen`
+siguen siendo placeholders. Las tres rutas están protegidas.
 `/` redirige a `/jornada`. Las rutas desconocidas muestran una página no
 encontrada. La integración requiere configurar el proyecto Firebase (ver Hito 01.4B).
-La persistencia de tareas está disponible mediante un servicio y `useTasks`;
-todavía no está conectada a los placeholders ni existe su interfaz definitiva.
+La pantalla de tareas está conectada a `useTasks`; todavía no permite crear,
+editar, cambiar estados ni eliminar tareas desde la interfaz.
 
 ## Alcance acordado del MVP
 
@@ -460,6 +461,56 @@ Pendientes manuales para la próxima interfaz: conectar useTasks, comprobar esta
 de carga y errores visibles, verificar las acciones con una cuenta propia y
 revisar el índice automático de createdAt en producción si devuelve un error de
 precondición. En esta etapa no se escribieron datos de prueba en producción.
+
+## Hito 02.3A: listado y filtros de Mis tareas
+
+`TasksPage` conecta la ruta `/tareas` con useTasks. `TasksView` presenta los filtros
+y estados de lectura; `TaskList` renderiza las tarjetas con título, descripción
+completa y una etiqueta textual de estado con icono decorativo. Se reutilizan Card,
+Button, los tokens Midnight Copper V2 y AppLayout, sin rediseñar la navegación.
+Los estilos propios están en `src/features/tasks/tasks.css`.
+
+Todas, Pendientes y Completadas filtran en memoria conservando el orden recibido.
+Los conteos siempre corresponden al total disponible de cada categoría. Cambiar
+de filtro no abre consultas ni listeners adicionales. Los botones nativos usan
+aria-pressed dentro de un fieldset con leyenda; se operan con Tab, Enter o Espacio.
+Una región de estado anuncia el resultado y los estados no dependen solo del color.
+
+Se distinguen carga inicial, cuenta sin tareas, filtro sin resultados y error de
+lectura. Ver todas limpia un filtro sin resultados. Reintentar remonta únicamente
+el contenedor de la suscripción, limpia el listener anterior y vuelve a mostrar
+carga; también reinicia el filtro a Todas. No se modificaron el hook, el servicio
+CRUD, las reglas ni `.env.local`. El hook existente impide mostrar datos de otra
+sesión, comportamiento cubierto también en las pruebas de esta pantalla.
+
+La ruta carga TasksPage bajo demanda con React.lazy/Suspense, evitando incluir
+Firestore y el listado en el paquete inicial de autenticación. El build final
+generó aproximadamente 380 kB para el paquete inicial y 474 kB para tareas, antes
+de gzip; ya no aparece la advertencia de un paquete único superior a 500 kB.
+No se agregaron dependencias.
+
+Validación: typecheck, build y lint correctos; **99 tests de aplicación** y
+**60 tests del emulador** aprobados (57 de reglas y 3 integraciones existentes).
+Los nueve tests nuevos de la página usan el hook real con un doble del servicio:
+listado/orden, filtros/conteos sin escrituras, carga, vacío global, filtro vacío,
+error y reintento, snapshots sucesivos, teclado y cambio de cuenta. Las pruebas
+de rutas/autenticación aíslan useTasks para no consultar Firestore real.
+
+Se revisó en Chrome a 320, 375, 768 y 1280 px usando componentes reales y datos
+locales de muestra en un archivo de revisión ignorado por Git. Se comprobaron
+ausencia de desbordamiento, textos largos, controles de al menos 44 px, foco
+visible, filtro por teclado, estados de lectura y movimiento reducido. Se verificó
+que el final del listado sea accesible sobre la navegación inferior al hacer scroll.
+Las capturas y el archivo local de revisión no forman parte del build ni alimentan
+la ruta real: `/tareas` siempre utiliza useTasks y los datos de la cuenta activa.
+
+**Pendiente de revisión visual del usuario: no se declara cerrado el hito.**
+Abrir `/tareas` tras iniciar sesión para revisar la cuenta real. Si todavía no hay
+tareas, se verá el vacío global; no se insertaron fixtures en producción para
+llenar la pantalla. Revisar también las capturas con datos de muestra de escritorio
+y móvil, el salto de línea de los filtros a 320 px, el teclado y la lectura con
+lector de pantalla. Los escenarios de error/reintento y filtro sin resultados
+están cubiertos con dobles; conviene repetirlos manualmente en un entorno de prueba.
 
 ## Entornos y despliegue posterior
 
