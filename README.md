@@ -581,6 +581,74 @@ Queda la revisión visual del usuario antes del cierre oficial, además de compr
 lector de pantalla y dispositivos móviles reales. Los errores de escritura se
 verificaron con dobles del SDK; no se alteraron permisos de producción para forzarlos.
 
+## Hito 03.1: persistencia de tarea en foco
+
+Sin cambios de interfaz. `focus.types.ts` define UserFocusDocument con exactamente
+`focusTaskId: string | null` en `users/{uid}`. Un documento inexistente equivale
+a foco nulo; seleccionar o quitar crea/reemplaza ese documento con un único campo.
+No se crean perfiles ni se borra el documento para quitar el foco.
+
+`createTaskFocusService()` obtiene el UID del SDK, sin aceptar un UID arbitrario.
+Expone getFocus, subscribeFocus y selectFocus(id | null). La selección es una
+transacción que lee documento de usuario y tarea propia; rechaza tareas ausentes
+o completadas y verifica la sesión durante y después de la operación. Los listeners
+omiten escrituras locales pendientes y se limpian explícitamente.
+
+`useTaskFocus()` usa useAuth y expone focusTaskId, loading, error, operationError,
+isMutating, selectFocus y clearFocus. No actualiza optimistamente el foco, propaga
+rechazos y descarta callbacks/respuestas de otra sesión o posteriores al desmontaje.
+El foco se conserva entre recargas por Firestore, sin depender de una fecha ni
+guardar la selección en localStorage. Todavía no está conectado a Mi Jornada.
+
+### Integridad y concurrencia
+
+Las reglas permiten get del documento propio, nunca listar usuarios ni borrar
+su documento. Create/update exigen exactamente focusTaskId, nulo o ID sin barras
+que exista en las tareas propias y permanezca pending al finalizar la escritura.
+Se usa getAfter para impedir seleccionar una tarea completada o borrada en el
+mismo batch. El acceso a documentos ajenos y anónimos permanece denegado.
+
+Completar o eliminar una tarea enfocada exige que el documento de usuario final
+ya no apunte a ella. Por eso el servicio CRUD ahora ejecuta esas operaciones en
+transacciones: lee el foco, lo limpia solo si coincide y actualiza/elimina la tarea
+en la misma confirmación. No cambia su API ni los campos/timestamps de las tareas.
+Editar texto y devolver a pendiente mantienen su comportamiento anterior.
+
+Las lecturas de ambas operaciones permiten a Firestore reintentar ante conflictos.
+Dos selecciones concurrentes dejan una única selección válida; seleccionar frente
+a completar puede rechazar la selección, pero no deja una referencia inválida.
+Completar una tarea diferente no borra el foco nuevo. No se elige automáticamente
+otra tarea después de invalidar el foco. El coste incluye una lectura adicional del
+documento de usuario en completar/eliminar; las transacciones necesitan conexión.
+
+Las reglas garantizan esta integridad para SDK clientes, partiendo de datos válidos.
+Admin SDK/consola puede omitirlas: no existe una función servidor para reparar
+automáticamente esas escrituras. Antes del despliegue revisar datos importados;
+si hay focos inválidos, deben corregirse explícitamente. No se escribe en producción
+para las pruebas ni se modificó `.env.local`.
+
+### Despliegue pendiente de autorización
+
+No se publicaron las reglas. El cliente nuevo lee users/{uid}; con las reglas
+anteriores esa lectura está denegada y completar/eliminar fallaría. Orden requerido:
+
+1. Revisar y aprobar las reglas y los resultados del emulador.
+2. Solo con autorización explícita, publicar las reglas en workspace-m4 usando el
+   procedimiento de despliegue ya documentado.
+3. Distribuir después el cliente actualizado; no habilitar la futura interfaz de
+   foco en clientes antiguos. Un cliente antiguo que intente completar/eliminar
+   una tarea enfocada sin liberar el foco será rechazado, preservando integridad.
+4. Validar selección, recarga y finalización/eliminación con cuentas de prueba
+   controladas, y limpiar sus datos al terminar.
+
+Se incorporaron integraciones de reglas/servicios para selección, lectura persistida,
+realtime, limpieza, tareas inválidas, aislamiento, batches adversariales y concurrencia,
+y pruebas del hook para carga, errores, cambios de cuenta y limpieza de suscripciones.
+Las pruebas existentes de tareas se conservaron; se actualizó la expectativa del
+documento de usuario reservado para permitir ahora el contrato de foco propio.
+Resultado: typecheck, build y lint correctos, 118 tests de aplicación y 74 del
+emulador aprobados. No se desplegaron reglas ni se probaron escrituras en producción.
+
 ## Entornos y despliegue posterior
 
 `.env` y `.env.*` están excluidos de

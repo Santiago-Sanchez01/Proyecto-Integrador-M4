@@ -1,0 +1,43 @@
+diff --git "a/C:\\Users\\Equipo\\Desktop\\P.I  M4\\workspace\\deployment-review\\2026-11-15T17-36-08-261Z\\remote-0-firestore.rules" "b/C:\\Users\\Equipo\\Desktop\\P.I  M4\\workspace\\firestore.rules"
+index 7994db1..0f24460 100644
+--- "a/C:\\Users\\Equipo\\Desktop\\P.I  M4\\workspace\\deployment-review\\2026-11-15T17-36-08-261Z\\remote-0-firestore.rules"	
++++ "b/C:\\Users\\Equipo\\Desktop\\P.I  M4\\workspace\\firestore.rules"	
+@@ -17,9 +17,22 @@ service cloud.firestore {
+     }
+ 
+     match /users/{uid} {
+-      // Reserved for a future, separately validated focusTaskId contract.
+-      // Parent documents are not needed to store documents in tasks.
+-      allow read, write: if false;
++      allow get: if isOwner(uid);
++      allow list, delete: if false;
++      allow create, update: if isOwner(uid)
++        && request.resource.data.keys().hasAll(['focusTaskId'])
++        && request.resource.data.keys().hasOnly(['focusTaskId'])
++        && (request.resource.data.focusTaskId == null
++          || (request.resource.data.focusTaskId is string
++            && request.resource.data.focusTaskId.trim().size() > 0
++            && request.resource.data.focusTaskId.matches('[^/]+')
++            && exists(/databases/$(database)/documents/users/$(uid)/tasks/$(request.resource.data.focusTaskId))
++            && getAfter(/databases/$(database)/documents/users/$(uid)/tasks/$(request.resource.data.focusTaskId)).data.status == 'pending'));
++
++      function released(taskId) {
++        return !exists(/databases/$(database)/documents/users/$(uid))
++          || getAfter(/databases/$(database)/documents/users/$(uid)).data.focusTaskId != taskId;
++      }
+ 
+       match /tasks/{taskId} {
+         allow get, list: if isOwner(uid);
+@@ -32,9 +45,10 @@ service cloud.firestore {
+         allow update: if isOwner(uid)
+           && validTask(request.resource.data)
+           && request.resource.data.createdAt == resource.data.createdAt
+-          && request.resource.data.updatedAt == request.time;
++          && request.resource.data.updatedAt == request.time
++          && (request.resource.data.status == 'pending' || released(taskId));
+ 
+-        allow delete: if isOwner(uid);
++        allow delete: if isOwner(uid) && released(taskId);
+       }
+     }
+ 

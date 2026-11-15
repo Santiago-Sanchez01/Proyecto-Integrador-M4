@@ -1,4 +1,4 @@
-import { addDoc, collection, deleteDoc, doc, documentId, getDocsFromServer, onSnapshot, orderBy, query, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore'
+import { addDoc, collection, doc, documentId, getDocsFromServer, onSnapshot, orderBy, query, runTransaction, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore'
 import type { DocumentData, QueryDocumentSnapshot, WithFieldValue } from 'firebase/firestore'
 import { getFirebaseAuth } from '../../lib/firebase'
 import { getFirebaseFirestore } from '../../lib/firestore'
@@ -40,6 +40,20 @@ export function createTasksService() {
     assertSession()
     if (typeof id !== 'string' || !id.trim() || id.includes('/')) throw taskError('invalid-id')
     return doc(tasks, id)
+  }
+
+  async function finishTask(id: string, remove: boolean) {
+    const ref = taskReference(id)
+    const db = getFirebaseFirestore()
+    const userRef = doc(db, 'users', uid!)
+    await runTransaction(db, async transaction => {
+      assertSession()
+      const user = await transaction.get(userRef)
+      assertSession()
+      if (user.exists() && user.data().focusTaskId === id) transaction.set(userRef, { focusTaskId: null })
+      if (remove) transaction.delete(ref)
+      else transaction.update(ref, { status: 'completed', updatedAt: serverTimestamp() })
+    })
   }
 
   return {
@@ -84,11 +98,12 @@ export function createTasksService() {
     async setTaskStatus(id: string, status: TaskStatus): Promise<void> {
       const ref = taskReference(id)
       if (status !== 'pending' && status !== 'completed') throw taskError('invalid-status')
-      await updateDoc(ref, { status, updatedAt: serverTimestamp() })
+      if (status === 'completed') await finishTask(id, false)
+      else await updateDoc(ref, { status, updatedAt: serverTimestamp() })
       assertSession()
     },
     async deleteTask(id: string): Promise<void> {
-      await deleteDoc(taskReference(id))
+      await finishTask(id, true)
       assertSession()
     },
   }

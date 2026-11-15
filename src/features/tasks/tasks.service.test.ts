@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { addDoc, collection, deleteDoc, doc, getDocsFromServer, onSnapshot, orderBy, query, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore'
-import type { QuerySnapshot } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDocsFromServer, onSnapshot, orderBy, query, runTransaction, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore'
+import type { QuerySnapshot, Transaction } from 'firebase/firestore'
 import { getFirebaseAuth } from '../../lib/firebase'
 import { getFirebaseFirestore } from '../../lib/firestore'
 import { createTasksService } from './tasks.service'
@@ -9,7 +9,7 @@ vi.mock('../../lib/firebase', () => ({ getFirebaseAuth: vi.fn() }))
 vi.mock('../../lib/firestore', () => ({ getFirebaseFirestore: vi.fn() }))
 vi.mock('firebase/firestore', async importOriginal => {
   const actual = await importOriginal<typeof import('firebase/firestore')>()
-  return { ...actual, addDoc: vi.fn(), collection: vi.fn(), deleteDoc: vi.fn(), doc: vi.fn(), getDocsFromServer: vi.fn(), onSnapshot: vi.fn(), orderBy: vi.fn(), query: vi.fn(), serverTimestamp: vi.fn(), updateDoc: vi.fn() }
+  return { ...actual, addDoc: vi.fn(), collection: vi.fn(), deleteDoc: vi.fn(), doc: vi.fn(), getDocsFromServer: vi.fn(), onSnapshot: vi.fn(), orderBy: vi.fn(), query: vi.fn(), runTransaction: vi.fn(), serverTimestamp: vi.fn(), updateDoc: vi.fn() }
 })
 
 const auth = { currentUser: { uid: 'alice' } as { uid: string } | null }
@@ -40,6 +40,7 @@ beforeEach(() => {
   vi.mocked(serverTimestamp).mockReturnValue({ kind: 'server-timestamp' } as unknown as ReturnType<typeof serverTimestamp>)
   vi.mocked(addDoc).mockResolvedValue({ id: 'new-task' } as Awaited<ReturnType<typeof addDoc>>)
   vi.mocked(getDocsFromServer).mockResolvedValue(snapshot())
+  vi.mocked(runTransaction).mockImplementation(async (_db, callback) => callback({ get: vi.fn().mockResolvedValue({ exists: () => false }), update: updateDoc, delete: deleteDoc } as unknown as Transaction))
   vi.mocked(onSnapshot).mockImplementation((...args: unknown[]) => {
     nextSnapshot = args[2] as typeof nextSnapshot
     snapshotError = args[3] as typeof snapshotError

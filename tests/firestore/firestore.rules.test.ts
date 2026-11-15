@@ -109,10 +109,11 @@ describe('Acceso aislado por usuario', () => {
     await assertFails(getDocs(collectionGroup(ownerDatabase(), 'tasks')))
   })
 
-  it('reserva users/{uid} sin habilitar focusTaskId ni perfiles', async () => {
+  it('permite solo el contrato de foco propio y no permite eliminar el documento', async () => {
     const ref = doc(ownerDatabase(), `users/${ownerUid}`)
-    await assertFails(getDoc(ref))
-    await assertFails(setDoc(ref, { focusTaskId: 'existing' }))
+    await assertSucceeds(getDoc(ref))
+    await assertSucceeds(setDoc(ref, { focusTaskId: 'existing' }))
+    await assertFails(setDoc(ref, { focusTaskId: null, name: 'Extra' }))
     await assertFails(deleteDoc(ref))
   })
 

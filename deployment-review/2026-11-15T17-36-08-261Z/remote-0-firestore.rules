@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function validTask(data) {
+      return data.keys().hasAll(['title', 'description', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['title', 'description', 'status', 'createdAt', 'updatedAt'])
+        && data.title is string && data.title.trim().size() > 0
+        && data.description is string && data.description.trim().size() > 0
+        && data.status is string && data.status in ['pending', 'completed']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt >= data.createdAt;
+    }
+
+    match /users/{uid} {
+      // Reserved for a future, separately validated focusTaskId contract.
+      // Parent documents are not needed to store documents in tasks.
+      allow read, write: if false;
+
+      match /tasks/{taskId} {
+        allow get, list: if isOwner(uid);
+
+        allow create: if isOwner(uid)
+          && validTask(request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(uid)
+          && validTask(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if isOwner(uid);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

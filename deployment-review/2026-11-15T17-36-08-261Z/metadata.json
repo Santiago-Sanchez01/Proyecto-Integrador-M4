@@ -1,0 +1,26 @@
+{
+  "account": "santiago.sanchez.git@gmail.com",
+  "project": {
+    "projectId": "workspace-m4",
+    "displayName": "workspace-m4",
+    "state": "ACTIVE"
+  },
+  "database": {
+    "name": "projects/workspace-m4/databases/(default)",
+    "locationId": "southamerica-east1",
+    "type": "FIRESTORE_NATIVE"
+  },
+  "backup": "C:\\Users\\Equipo\\Desktop\\P.I  M4\\workspace\\deployment-review\\2026-11-15T17-36-08-261Z",
+  "release": {
+    "name": "projects/workspace-m4/releases/cloud.firestore",
+    "rulesetName": "projects/workspace-m4/rulesets/0d0e3b8f-303d-4576-9edd-191d31e717a4",
+    "updateTime": "2026-11-13T16:34:42.710748Z"
+  },
+  "localSha256": "ae4b0ee5b3a59ddb5953247c7ca5de9283342444072774776569c1341101c5f6",
+  "data": {
+    "documents": 0,
+    "missingParents": 1,
+    "compatible": 0,
+    "invalid": []
+  }
+}
