@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import TaskList from './TaskList'
+import type { TaskActions } from './TaskList'
 import type { Task, TaskStatus } from './task.types'
 import './tasks.css'
 
@@ -10,11 +11,12 @@ type TasksViewProps = {
   loading: boolean
   error: string | null
   onRetry: () => void
+  actions?: TaskActions
 }
 
 type TaskFilter = 'all' | TaskStatus
 
-export default function TasksView({ tasks, loading, error, onRetry }: TasksViewProps) {
+export default function TasksView({ tasks, loading, error, onRetry, actions }: TasksViewProps) {
   const [filter, setFilter] = useState<TaskFilter>('all')
 
   if (loading) {
@@ -65,7 +67,7 @@ export default function TasksView({ tasks, loading, error, onRetry }: TasksViewP
           <p>Podés cambiar el filtro para ver el resto de tus tareas.</p>
           <Button variant="secondary" onClick={() => setFilter('all')}>Ver todas</Button>
         </Card>
-      ) : <TaskList tasks={visibleTasks} />}
+      ) : <TaskList tasks={visibleTasks} actions={actions} />}
     </section>
   )
 }

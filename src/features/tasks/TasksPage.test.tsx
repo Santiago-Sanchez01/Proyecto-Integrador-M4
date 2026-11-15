@@ -148,6 +148,8 @@ describe('Mis tareas: visualización sin escrituras', () => {
     load()
     expect(screen.getByRole('group', { name: 'Mostrar tareas' })).toBeInTheDocument()
     await user.tab()
+    expect(screen.getByRole('button', { name: 'Nueva tarea' })).toHaveFocus()
+    await user.tab()
     expect(screen.getByRole('button', { name: 'Todas: 3 tareas' })).toHaveFocus()
     await user.tab()
     await user.keyboard('{Enter}')

@@ -2,6 +2,32 @@
   min-width: 0;
 }
 
+.tasks-page-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-6);
+}
+
+.task-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+
+.task-card__actions .ui-button {
+  font-size: 0.875rem;
+}
+
+.tasks-operation-message {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-secondary);
+}
+
+.tasks-operation-message[role='alert'] {
+  color: var(--color-danger);
+}
+
 .tasks-filters {
   min-width: 0;
   margin: 0;

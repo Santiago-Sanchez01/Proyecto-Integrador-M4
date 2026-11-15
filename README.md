@@ -22,12 +22,11 @@ Aplicación de gestión individual de tareas con React, TypeScript y Firebase.
 - `src/test/setup.ts`: jest-dom y limpieza del DOM entre pruebas.
 
 Las rutas `/login` y `/register` tienen formularios conectados a Firebase Auth.
-`/tareas` muestra el listado de solo lectura con filtros; `/jornada` y `/resumen`
+`/tareas` permite crear, editar, completar y eliminar tareas; `/jornada` y `/resumen`
 siguen siendo placeholders. Las tres rutas están protegidas.
 `/` redirige a `/jornada`. Las rutas desconocidas muestran una página no
 encontrada. La integración requiere configurar el proyecto Firebase (ver Hito 01.4B).
-La pantalla de tareas está conectada a `useTasks`; todavía no permite crear,
-editar, cambiar estados ni eliminar tareas desde la interfaz.
+La pantalla de tareas está conectada a `useTasks` y conserva los filtros de estado.
 
 ## Alcance acordado del MVP
 
@@ -511,6 +510,76 @@ llenar la pantalla. Revisar también las capturas con datos de muestra de escrit
 y móvil, el salto de línea de los filtros a 320 px, el teclado y la lectura con
 lector de pantalla. Los escenarios de error/reintento y filtro sin resultados
 están cubiertos con dobles; conviene repetirlos manualmente en un entorno de prueba.
+
+## Hito 02.3B: interfaz CRUD
+
+`TasksPage` coordina los formularios y usa exclusivamente las operaciones de
+useTasks. `TaskList` recibe callbacks para editar, cambiar estado y pedir una
+eliminación; `TasksView` conserva los filtros y el orden del listener. No se
+modificaron el servicio, el hook, las reglas ni `.env.local`, y no se agregaron
+dependencias.
+
+Componentes nuevos:
+
+- `TaskModal`: dialog nativo con fondo inerte, scroll de página bloqueado,
+  recorrido cíclico con Tab/Shift+Tab, Escape controlado y restauración del foco.
+- `TaskEditor`: título y descripción obligatorios, validación local por trim,
+  precarga al editar, comparación del borrador con el contenido inicial y errores
+  accesibles. Usa los componentes Input, Textarea y Button existentes.
+- `DeleteTaskDialog`: confirmación explícita con título de la tarea, foco inicial
+  en Cancelar y errores reintentables. No se elimina por abrir o cancelar el diálogo.
+- `task-modal.css`: panel de 520 px a la derecha desde 768 px y pantalla completa
+  por debajo; confirmación de eliminación centrada, usando los tokens existentes.
+
+Guardar espera la promesa del hook; el formulario se cierra solo al confirmarse.
+Durante guardado/eliminación se deshabilitan campos y acciones de cierre y se
+impiden envíos duplicados mediante un bloqueo inmediato, además del estado visual.
+La página serializa las acciones de escritura para evitar dobles operaciones.
+Completar/volver a pendiente muestra el estado anterior hasta recibir el snapshot
+confirmado; las tareas no se insertan, editan o eliminan de forma optimista.
+Los filtros y conteos se actualizan únicamente con useTasks. Si una tarea sale
+del filtro activo, se devuelve el foco a Nueva tarea. Los filtros se conservan al
+crear; una nueva tarea pending no aparecerá bajo Completadas hasta cambiar el filtro.
+
+Al cerrar un borrador modificado se ofrece Seguir editando o Descartar cambios.
+La entrada usa `createBrowserRouter`/RouterProvider con las mismas rutas para
+habilitar useBlocker, en lugar de interceptar manualmente el historial del navegador.
+Se comprobó Atrás real en Chrome. La recarga/cierre de pestaña usa beforeunload:
+el navegador controla el mensaje y puede limitarlo, especialmente en móviles.
+No se persisten borradores en almacenamiento local. Durante una escritura pendiente
+la navegación interna permanece bloqueada; las solicitudes ya enviadas no se pueden
+cancelar de forma fiable. Sin conexión pueden permanecer pendientes.
+
+La edición conserva el contenido precargado sin sobrescribirlo por cambios remotos
+mientras se escribe. Sigue vigente la política de última escritura de Firestore:
+no se agregó versionado ni detección de conflictos entre pestañas. Si la tarea fue
+eliminada en otra pestaña, el error de actualización se muestra y el borrador se
+mantiene. Al cambiar de cuenta se desmonta todo el estado del editor.
+
+### Validación y revisión
+
+Typecheck, build y lint correctos; **114 pruebas de aplicación** y **60 pruebas
+del emulador** aprobadas. Se agregaron pruebas de apertura/cierre, foco,
+teclado, campos vacíos, creación/edición exitosa y fallida, borradores, bloqueo de
+navegación, beforeunload, estados, confirmación/cancelación de eliminación y
+prevención de duplicados. jsdom solo simula showModal/close para las pruebas; el
+comportamiento real de dialog, su foco y la inercia del fondo se comprobaron en Chrome.
+El emulador conserva las 57 reglas y 3 integraciones del servicio, sin cambios.
+
+Se verificó la ruta real contra Firebase con una cuenta temporal y tareas reales:
+crear, editar conservando createdAt, completar, volver a pendiente, conteos/filtros,
+cancelar una eliminación y confirmar la eliminación. Se comprobaron pantalla completa
+a 320/375 px y panel a 768/1280 px, sin desbordamiento; foco inicial, Tab dentro del
+diálogo, Escape con borrador y Atrás bloqueado hasta confirmar. Las tareas de prueba
+y las cuentas temporales fueron eliminadas al finalizar, también en el intento
+inicial de diagnóstico. No se registraron credenciales ni tokens.
+
+Las capturas locales ignoradas por Git están en
+`node_modules/.tmp/tasks-crud-review/` (editor de escritorio/móvil, edición,
+confirmación de eliminación y listado). No forman parte del build de producción.
+Queda la revisión visual del usuario antes del cierre oficial, además de comprobar
+lector de pantalla y dispositivos móviles reales. Los errores de escritura se
+verificaron con dobles del SDK; no se alteraron permisos de producción para forzarlos.
 
 ## Entornos y despliegue posterior
 
