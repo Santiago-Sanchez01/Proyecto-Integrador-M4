@@ -1,0 +1,115 @@
+.jornada {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.jornada__navigation {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.jornada__link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.jornada h2 {
+  margin: 0 0 var(--space-4);
+  font-size: 1.125rem;
+}
+
+.jornada h3 {
+  margin: 0 0 var(--space-3);
+  font-size: 1rem;
+}
+
+.jornada p {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-secondary);
+}
+
+.jornada p:last-child {
+  margin-bottom: 0;
+}
+
+.jornada__section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.jornada__percentage {
+  color: var(--color-accent);
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.jornada progress {
+  display: block;
+  width: 100%;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-background);
+  accent-color: var(--color-accent);
+}
+
+.jornada progress::-webkit-progress-bar { background: var(--color-background); }
+.jornada progress::-webkit-progress-value { background: var(--color-accent); }
+.jornada progress::-moz-progress-bar { background: var(--color-accent); }
+
+.jornada__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-6) 0 0;
+}
+
+.jornada__metrics dt {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.jornada__metrics dd {
+  margin: var(--space-1) 0 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.jornada__columns {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.jornada__columns > section { min-width: 0; }
+.jornada__columns .ui-card { height: 100%; }
+
+.jornada__focus { border-color: var(--color-accent); }
+.jornada .jornada__focus-label { color: var(--color-accent); font-size: 0.875rem; }
+.jornada__focus h3 { font-size: 1.375rem; }
+.jornada__description { white-space: pre-wrap; }
+
+.jornada__status {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.jornada__pending { margin: 0; padding: 0; list-style: none; }
+.jornada__pending li + li { margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--color-border); }
+
+@media (min-width: 768px) {
+  .jornada__columns { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  .jornada__metrics dt { font-size: 0.875rem; }
+}

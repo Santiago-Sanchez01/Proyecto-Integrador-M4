@@ -7,6 +7,7 @@ import { observeSession } from '../features/auth/auth.service'
 
 vi.mock('../features/auth/auth.service', () => ({ observeSession: vi.fn(), login: vi.fn(), register: vi.fn(), logout: vi.fn() }))
 vi.mock('../features/tasks/useTasks', () => ({ useTasks: () => ({ tasks: [], loading: false, error: null }) }))
+vi.mock('../features/tasks/useTaskFocus', () => ({ useTaskFocus: () => ({ focusTaskId: null, loading: false, error: null }) }))
 
 beforeEach(() => {
   vi.mocked(observeSession).mockImplementation(onChange => {
