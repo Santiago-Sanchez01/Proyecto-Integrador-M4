@@ -109,6 +109,16 @@
 .jornada__pending { margin: 0; padding: 0; list-style: none; }
 .jornada__pending li + li { margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--color-border); }
 
+.jornada__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.jornada__operation:empty { display: none; }
+.jornada__operation [role='alert'] { color: var(--color-danger); }
+
 @media (min-width: 768px) {
   .jornada__columns { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
   .jornada__metrics dt { font-size: 0.875rem; }

@@ -1,7 +1,18 @@
+import { useRef } from 'react'
 import { Link } from 'react-router'
 import Card from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
 import type { Task } from '../tasks/task.types'
 import './jornada.css'
+
+type JornadaActions = {
+  disabled: boolean
+  pending: string | null
+  error: string | null
+  onSelect: (id: string) => void
+  onClear: () => void
+  onComplete: () => void
+}
 
 type JornadaViewProps = {
   tasks: Task[]
@@ -10,6 +21,7 @@ type JornadaViewProps = {
   focusTaskId: string | null
   focusLoading: boolean
   focusError: string | null
+  actions?: JornadaActions
 }
 
 function FocusContent({ focus, focusTaskId, loading, error, empty }: { focus: Task | undefined; focusTaskId: string | null; loading: boolean; error: string | null; empty: boolean }) {
@@ -23,21 +35,32 @@ function FocusContent({ focus, focusTaskId, loading, error, empty }: { focus: Ta
     <span className="jornada__status">Pendiente</span>
   </>
   if (empty) return <><h3>Tu jornada está por empezar</h3><p>Todavía no tenés tareas. Podés crearlas en Mis tareas.</p></>
-  return <><h3>Sin foco seleccionado</h3><p>Tu tarea en foco aparecerá acá cuando tengas una selección guardada.</p></>
+  return <><h3>Sin foco seleccionado</h3><p>Elegí una tarea pendiente de la lista para concentrarte en ella. La selección se conserva hasta que la cambies, la quites o completes la tarea.</p></>
 }
 
-export default function JornadaView({ tasks, loading, error, focusTaskId, focusLoading, focusError }: JornadaViewProps) {
+export default function JornadaView({ tasks, loading, error, focusTaskId, focusLoading, focusError, actions }: JornadaViewProps) {
+  const focusHeading = useRef<HTMLHeadingElement>(null)
   const pending = tasks.filter(task => task.status === 'pending')
   const completed = tasks.length - pending.length
   const progress = tasks.length === 0 ? 0 : Math.round(completed / tasks.length * 100)
   const focus = pending.find(task => task.id === focusTaskId)
   const others = pending.filter(task => task.id !== focusTaskId).slice(0, 3)
+  const disabled = actions?.disabled || focusLoading || !!focusError
+  function act(operation: () => void) {
+    // Keep keyboard focus on a stable element when the clicked task leaves its list.
+    focusHeading.current?.focus()
+    operation()
+  }
 
   return (
     <div className="jornada">
       <div className="jornada__navigation">
         <Link className="ui-button ui-button--secondary jornada__link" to="/tareas">Administrar mis tareas</Link>
       </div>
+      {actions && <div className="jornada__operation">
+        {actions.pending && <p role="status">{actions.pending}</p>}
+        {actions.error && <p role="alert">{actions.error}</p>}
+      </div>}
       {error ? <Card><div role="alert"><h2>No pudimos cargar tu jornada</h2><p>{error}</p></div></Card>
         : loading ? <Card><p role="status">Cargando tus tareas…</p></Card>
           : <>
@@ -56,15 +79,21 @@ export default function JornadaView({ tasks, loading, error, focusTaskId, focusL
             <div className="jornada__columns">
               <section aria-labelledby="jornada-focus-title">
                 <Card className="jornada__focus">
-                  <h2 id="jornada-focus-title">Tu tarea en foco</h2>
+                  <h2 id="jornada-focus-title" ref={focusHeading} tabIndex={-1}>Tu tarea en foco</h2>
                   <FocusContent focus={focus} focusTaskId={focusTaskId} loading={focusLoading} error={focusError} empty={tasks.length === 0} />
+                  {actions && !focusLoading && !focusError && focusTaskId !== null && <div className="jornada__actions">
+                    {focus && <Button disabled={disabled} onClick={() => act(actions.onComplete)}>Completar tarea</Button>}
+                    <Button variant="secondary" disabled={disabled} onClick={() => act(actions.onClear)}>Quitar foco</Button>
+                  </div>}
                 </Card>
               </section>
               <section aria-labelledby="jornada-pending-title">
                 <Card>
                   <h2 id="jornada-pending-title">Otras tareas pendientes</h2>
                   {others.length > 0 ? <ul className="jornada__pending" role="list">
-                    {others.map(task => <li key={task.id}><h3>{task.title}</h3><p className="jornada__description">{task.description}</p><span className="jornada__status">Pendiente</span></li>)}
+                    {others.map(task => <li key={task.id}><h3>{task.title}</h3><p className="jornada__description">{task.description}</p><span className="jornada__status">Pendiente</span>
+                      {actions && <div className="jornada__actions"><Button variant="secondary" disabled={disabled} aria-label={`Elegir foco: ${task.title}`} onClick={() => act(() => actions.onSelect(task.id))}>Elegir foco</Button></div>}
+                    </li>)}
                   </ul> : <p>{pending.length > 0 ? 'No tenés otras tareas pendientes.' : tasks.length === 0 ? 'Las tareas pendientes aparecerán acá.' : 'No tenés tareas pendientes.'}</p>}
                 </Card>
               </section>
