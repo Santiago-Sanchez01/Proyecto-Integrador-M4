@@ -658,5 +658,211 @@ estas variables son visibles en el bundle del navegador.
 
 En Vercel, seleccionar `workspace/` como raíz si se importa el directorio padre.
 Usar el preset Vite, `npm run build` y salida `dist/`. `vercel.json` incluye el
-fallback SPA para acceso directo a rutas. Revisarlo al incorporar `/api`.
+fallback SPA para acceso directo a rutas y excluye `/api` para las funciones.
 No se realizó un despliegue en este hito.
+
+## Hito 04.2: lectura autenticada desde el servidor
+
+Arquitectura mínima, sin integración visual ni envío de correo:
+
+- `api/summary.ts`: función Node compatible con Vercel, acepta solo POST.
+- `server/firebase-admin.ts`: inicialización diferida y reutilizable del Admin SDK.
+- `server/task-summary.ts`: consulta y validación de tareas y cálculo del resumen.
+- `shared/summary.types.ts`: contrato JSON, reutiliza el modelo Task mediante tipos.
+- `tests/backend/` y `vitest.backend.config.ts`: pruebas Node con mocks, sin secretos.
+
+Node local verificado: 24.20.0. `engines.node` fija la familia 24.x para Vercel.
+La única dependencia de producción incorporada es `firebase-admin`. Se usan los
+tipos HTTP nativos de Node, sin framework ni otra biblioteca para el endpoint.
+Las credenciales del servidor no forman parte del build Vite; ningún módulo de
+`src/` importa Firebase Admin ni `server/`.
+
+### Contrato HTTP
+
+`POST /api/summary`, con `Authorization: Bearer <Firebase ID token>`.
+No necesita body. Los datos de body/query, incluidos UID, email y rutas,
+se ignoran como fuente de identidad. No acepta destinatarios personalizados.
+El token se verifica con `verifyIdToken(token, true)`, incluyendo revocación y
+estado de cuenta. No se devuelven claims, tokens ni email; la identidad mínima
+es `user.uid` del token verificado.
+
+Respuesta 200 de ejemplo ficticio:
+
+```json
+{
+  "user": { "uid": "example-user" },
+  "totals": { "total": 1, "pending": 1, "completed": 0 },
+  "progress": 0,
+  "tasks": [{
+    "id": "example-task",
+    "title": "Revisar entrega",
+    "description": "Comprobar los puntos pendientes.",
+    "status": "pending",
+    "createdAt": "2026-01-01T12:00:00.000Z",
+    "updatedAt": "2026-01-01T12:00:00.000Z"
+  }]
+}
+```
+
+Timestamps serializados a ISO UTC con precisión de milisegundos. Progreso
+redondeado al entero más próximo, o cero si no hay tareas. No se guarda ninguna
+estadística. La consulta usa `users/{uid}/tasks`, ordenada por createdAt y luego
+ID descendentes, igual que el servicio cliente. Selecciona solo los cinco campos
+del contrato; no necesita un índice compuesto adicional con la configuración
+de índices simple existente. Los documentos leídos se validan antes de responder.
+
+Errores JSON: `{ "error": { "code": "...", "message": "..." } }`:
+
+| HTTP | code | Motivo |
+| --- | --- | --- |
+| 405 | METHOD_NOT_ALLOWED | Método distinto de POST; incluye Allow: POST |
+| 401 | UNAUTHENTICATED | Falta Authorization |
+| 401 | INVALID_TOKEN | Encabezado mal formado o token/usuario no válido |
+| 413 | SUMMARY_TOO_LARGE | Exceso de tareas o tamaño |
+| 500 | INTERNAL_ERROR | Configuración, red, Auth, Firestore o datos inválidos |
+
+No se exponen errores internos, trazas ni credenciales. No se registran tokens
+o secretos. Todas las respuestas incluyen Cache-Control: private, no-store,
+Vercel-CDN-Cache-Control: no-store y X-Content-Type-Options: nosniff. No se habilita
+CORS general. El handler responde JSON incluso ante fallos de autenticación.
+
+### Límites y seguridad
+
+Máximo 100 tareas y 1 MiB de JSON UTF-8. Se solicitan hasta 101 documentos para
+detectar exceso; se responde 413 sin truncar tareas ni producir estadísticas
+parciales. El límite reduce coste y volumen de lectura; no equivale a paginación.
+Documentos muy grandes pueden consumir memoria durante la lectura del snapshot,
+aunque la respuesta se rechace. Authorization se limita a 8192 caracteres.
+
+Admin SDK omite las reglas de Firestore. El aislamiento depende del UID verificado
+y de la ruta construida exclusivamente por el servidor, cubiertos por pruebas.
+Usar una cuenta de servicio dedicada con permisos mínimos de lectura de Firestore
+y consulta de usuarios de Authentication para comprobar revocación. No otorgar
+permisos de propietario/editor ni distribuir credenciales al navegador. Para una
+publicación futura, revisar límites de tráfico/coste en Vercel: un usuario válido
+puede repetir consultas y este hito no implementa rate limiting distribuido.
+
+La función rechaza FIREBASE_AUTH_EMULATOR_HOST y FIRESTORE_EMULATOR_HOST: no acepta
+el modo de tokens no firmados del emulador. Las pruebas de backend usan mocks;
+las pruebas de reglas mantienen su emulador aislado demo-workspace-m4.
+
+### Variables del servidor
+
+`.env.example` documenta `FIREBASE_ADMIN_PROJECT_ID=workspace-m4` como proyecto
+explícito de desarrollo. Configurarlo en el entorno del proceso servidor, sin usar
+VITE_. El proyecto nunca se obtiene del body, query ni token enviado por el cliente.
+
+Firebase Admin usa `applicationDefault()` (ADC), manteniendo la inicialización
+diferida y la instancia con nombre `workspace-server`. Ya no requiere
+FIREBASE_ADMIN_CLIENT_EMAIL ni FIREBASE_ADMIN_PRIVATE_KEY; esas variables no se
+utilizan. No hay fallback automático a `cert()` ni rutas de credenciales en código.
+
+La ausencia de proyecto falla antes de inicializar. La resolución de ADC y la
+obtención de tokens pueden ocurrir después, al hacer la primera llamada al SDK:
+crear la instancia no demuestra que las credenciales o IAM sean válidos. Los
+fallos de configuración o ADC se responden con 500 genérico, sin detalles internos.
+
+### ADC local mediante impersonación (validado)
+
+Firebase Admin con ADC mediante impersonación de una cuenta de servicio dedicada
+ya fue validado en el entorno local con Vercel Dev y Firebase real. Esta validación
+no implica que exista un despliegue ni una identidad de producción configurada.
+
+Para reproducirlo en otro entorno local autorizado, disponer de Google Cloud CLI
+y una cuenta de servicio dedicada. El desarrollador necesita poder impersonarla
+(normalmente roles/iam.serviceAccountTokenCreator sobre esa cuenta específica).
+La cuenta necesita lectura de Firestore y consulta de usuarios de Firebase Auth
+para comprobar revocación. No se necesitan permisos de escritura para este endpoint.
+
+Comando de referencia para configurar ADC en otro entorno autorizado, sustituyendo
+el marcador por la cuenta aprobada; no contiene una identidad ni credencial real:
+
+```powershell
+gcloud auth application-default login --impersonate-service-account="CUENTA_DE_SERVICIO_AUTORIZADA" --project="workspace-m4"
+```
+
+`gcloud auth login` autentica la CLI y no equivale a configurar ADC. Tampoco bastan
+el login de Firebase CLI ni la configuración global de impersonación de gcloud.
+Google Cloud CLI guarda ADC fuera del repositorio; ese archivo puede contener
+credenciales renovables del desarrollador, aunque no incluya una clave privada de
+la cuenta de servicio. No copiarlo a la aplicación, Git, logs ni archivos VITE_*.
+`.gitignore` excluye explícitamente `application_default_credentials.json` tanto
+en la raíz como en cualquier subdirectorio. Esta exclusión es preventiva: las
+credenciales deben permanecer fuera del repositorio y nunca agregarse con `git add -f`.
+
+Con la ubicación habitual de ADC no es necesario definir GOOGLE_APPLICATION_CREDENTIALS.
+Si ya existe esa variable, ADC prioriza su archivo: revisar que corresponda a una
+configuración autorizada y esté fuera del repositorio. No se carga ni inspecciona
+su contenido desde el código de aplicación. Reiniciar Vercel Dev al cambiar de
+credenciales, porque los SDK pueden conservar clientes y tokens en memoria.
+
+El ajuste documental de cierre no modifica `.env.local`, credenciales, cuentas,
+IAM ni infraestructura; registra la validación local ya confirmada.
+
+### Identidad de producción en Vercel
+
+Vercel requiere configurar una identidad de servidor independiente; no dispone
+automáticamente del ADC local. No subir ADC personal ni asumir que el proyecto
+explícito concede acceso. Evaluar posteriormente OIDC con Workload Identity
+Federation y una configuración ADC compatible, limitada al proyecto y entorno
+autorizados. Esa integración requiere su propia revisión y prueba; no se implementa
+en este hito. Mantener separados Development, Preview y Production. No se requieren
+variables AWS ni se inicializa Analytics.
+
+Siguen pendientes la configuración y revisión de IAM para esa identidad de
+producción, la validación en Vercel y los controles contra abuso (límites de
+frecuencia y concurrencia, cuotas y monitorización de costes). La aprobación
+del Hito 04.2 corresponde únicamente al entorno local, no a producción.
+
+### Resultado de la validación local del Hito 04.2
+
+Se confirmó manualmente el funcionamiento conjunto del frontend Vite y la API
+en Vercel Dev, sin desplegar:
+
+| Prueba local | Resultado confirmado |
+| --- | --- |
+| GET /api/summary | HTTP 405 |
+| POST /api/summary sin token | HTTP 401 |
+| POST /api/summary con Firebase ID token real de prueba | HTTP 200 |
+| Resumen obtenido desde Firestore | 8 tareas, 0 pendientes, 8 completadas, progreso 100 % |
+
+La prueba autenticada validó Firebase Auth, Firebase Admin, ADC mediante
+impersonación y lectura de Firestore. No se guardan aquí tokens, credenciales,
+rutas privadas ni datos identificatorios del usuario de prueba.
+
+La cobertura automatizada incluye aislamiento de Alice y Bob con Auth y Firestore
+simulados, identidad falsificada en body/query/headers sin autoridad, rechazo de
+solicitudes sin token y headers de caché en respuestas 200, 401, 405, 413 y 500.
+El cierre local conserva pendiente la identidad, IAM y seguridad operativa de
+producción descritas arriba.
+
+### Procedimiento para repetir la validación local sin desplegar
+
+1. Ejecutar `npm run typecheck`, `npm run lint`, `npm run build`, `npm test` y
+   `npm run test:backend`. Este último no carga archivos `.env` ni usa credenciales
+   reales: incluye una petición HTTP en localhost con Auth y Firestore simulados.
+2. Con Java 21 disponible, ejecutar `npm run test:rules` para la regresión de reglas.
+3. Para comprobar la función completa con Firebase real, configurar manualmente
+   ADC con impersonación según el apartado anterior y establecer
+   `$env:FIREBASE_ADMIN_PROJECT_ID = "workspace-m4"` en el proceso servidor.
+   No modificar `.env.local`. Usar una cuenta de prueba controlada y no fijar
+   variables de emulador en este proceso.
+4. Con la CLI de Vercel disponible, ejecutar `vercel dev --listen 3000` desde
+   `workspace/`. Revisar cualquier solicitud de vinculación de proyecto; no
+   ejecutar `vercel deploy`. `npm run dev` por sí solo sirve Vite, no las Functions.
+5. Iniciar sesión en el frontend local. Obtener un ID token vigente mediante
+   `getFirebaseAuth().currentUser.getIdToken()` y enviarlo directamente como Bearer
+   al POST local, sin imprimirlo, copiarlo a archivos o incorporarlo a comandos
+   versionados. Comprobar totales, orden, 401 sin token y 405 con GET. No se debe
+   crear ni modificar ningún documento desde este endpoint.
+6. Revisar la configuración y el enrutamiento en Vercel antes de autorizar una
+   publicación futura. Las pruebas con mocks no validan IAM ni credenciales reales.
+
+El botón de correo sigue deshabilitado. No se implementó AWS SES ni se conectó
+el frontend a este endpoint. No se desplegaron funciones ni se cambiaron reglas.
+
+Referencias oficiales: [Vite y Functions en Vercel](https://vercel.com/docs/frameworks/frontend/vite),
+[Firebase Admin](https://firebase.google.com/docs/admin/setup) y
+[verificación de tokens y revocación](https://firebase.google.com/docs/auth/admin/manage-sessions).
+Para la siguiente etapa: [ADC local con impersonación](https://docs.cloud.google.com/docs/authentication/set-up-adc-local-dev-environment)
+y [OIDC de Vercel con Google Cloud](https://vercel.com/docs/oidc/gcp).

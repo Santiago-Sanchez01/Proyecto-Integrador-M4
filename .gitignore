@@ -23,6 +23,7 @@ coverage/
 *.key
 *service-account*.json
 *serviceAccount*.json
+**/application_default_credentials.json
 
 # Editor directories and files
 .vscode/*
