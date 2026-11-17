@@ -1,4 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "build": { "env": { "NODEJS_HELPERS": "0" } },
   "rewrites": [{ "source": "/((?:login|register|jornada|tareas|resumen)/?)", "destination": "/index.html" }]
 }

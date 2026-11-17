@@ -1,9 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { SummaryError, SummaryErrorCode } from '../shared/summary.types'
-import { getAdminAuth } from '../server/firebase-admin'
+import { authenticateUser, AuthenticationError } from '../server/authenticated-user'
 import { MAX_SUMMARY_BYTES, readTaskSummary, SummaryTooLargeError } from '../server/task-summary'
-
-const invalidTokenCodes = new Set(['auth/argument-error', 'auth/invalid-argument', 'auth/invalid-id-token', 'auth/id-token-expired', 'auth/id-token-revoked', 'auth/user-disabled', 'auth/user-not-found'])
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -18,20 +16,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     res.setHeader('Allow', 'POST')
     return fail(405, 'METHOD_NOT_ALLOWED', 'Usá POST para consultar el resumen.')
   }
-  const authorization = req.headers.authorization
-  if (!authorization) return fail(401, 'UNAUTHENTICATED', 'Iniciá sesión para consultar el resumen.')
-  const match = typeof authorization === 'string' && authorization.length <= 8192 ? /^Bearer ([^\s,]+)$/i.exec(authorization) : null
-  if (!match) return fail(401, 'INVALID_TOKEN', 'La sesión no es válida. Volvé a iniciar sesión.')
   let uid: string
   try {
-    const verified = await getAdminAuth().verifyIdToken(match[1], true)
-    if (typeof verified.uid !== 'string' || !verified.uid.trim() || verified.uid.includes('/') || verified.uid.length > 128) {
-      return fail(401, 'INVALID_TOKEN', 'La sesión no es válida. Volvé a iniciar sesión.')
-    }
-    uid = verified.uid
+    uid = (await authenticateUser(req)).uid
   } catch (error) {
-    const code = error && typeof error === 'object' && 'code' in error ? error.code : null
-    if (typeof code === 'string' && invalidTokenCodes.has(code)) return fail(401, 'INVALID_TOKEN', 'La sesión no es válida. Volvé a iniciar sesión.')
+    if (error instanceof AuthenticationError) return fail(error.status, error.code, error.message)
     return fail(500, 'INTERNAL_ERROR', 'No pudimos obtener tu resumen. Intentá nuevamente.')
   }
   try {

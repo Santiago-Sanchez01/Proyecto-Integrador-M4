@@ -12,6 +12,7 @@ Aplicación de gestión individual de tareas con React, TypeScript y Firebase.
 - `npm test`: ejecutar Vitest una vez.
 - `npm run test:watch`: ejecutar Vitest en modo interactivo.
 - `npm run test:rules`: ejecutar reglas e integraciones del servicio en el emulador.
+- `npm run test:backend`: ejecutar pruebas del servidor con Firebase y SES simulados.
 - `npm run preview`: servir el build localmente.
 
 ## Organización
@@ -22,8 +23,9 @@ Aplicación de gestión individual de tareas con React, TypeScript y Firebase.
 - `src/test/setup.ts`: jest-dom y limpieza del DOM entre pruebas.
 
 Las rutas `/login` y `/register` tienen formularios conectados a Firebase Auth.
-`/tareas` permite crear, editar, completar y eliminar tareas; `/jornada` y `/resumen`
-siguen siendo placeholders. Las tres rutas están protegidas.
+`/tareas` permite crear, editar, completar y eliminar tareas; `/jornada` muestra y
+gestiona la tarea en foco; `/resumen` muestra todas las tareas y su progreso.
+Las tres rutas están protegidas.
 `/` redirige a `/jornada`. Las rutas desconocidas muestran una página no
 encontrada. La integración requiere configurar el proyecto Firebase (ver Hito 01.4B).
 La pantalla de tareas está conectada a `useTasks` y conserva los filtros de estado.
@@ -31,11 +33,12 @@ La pantalla de tareas está conectada a `useTasks` y conserva los filtros de est
 ## Alcance acordado del MVP
 
 - Título y descripción obligatorios.
-- Una tarea en foco persistente por usuario; posteriormente se guardará como
+- Una tarea en foco persistente por usuario, guardada como
   `focusTaskId` en `users/{uid}`.
 - Resumen del estado actual de todas las tareas, sin filtros temporales.
 - Sin vencimientos, zonas horarias, prioridades ni colaboración.
-- La interfaz de tareas, Vercel Functions y AWS SES quedan para otros hitos.
+- El envío manual mediante SES está implementado con dobles de pruebas; permanece
+  deshabilitado por defecto y pendiente de autorización y validación real.
 
 ## Hito 01.3A: Midnight Copper V2
 
@@ -806,8 +809,8 @@ automáticamente del ADC local. No subir ADC personal ni asumir que el proyecto
 explícito concede acceso. Evaluar posteriormente OIDC con Workload Identity
 Federation y una configuración ADC compatible, limitada al proyecto y entorno
 autorizados. Esa integración requiere su propia revisión y prueba; no se implementa
-en este hito. Mantener separados Development, Preview y Production. No se requieren
-variables AWS ni se inicializa Analytics.
+en este hito. Mantener separados Development, Preview y Production. No se inicializa
+Analytics. Las variables AWS de 04.3 se documentan al final.
 
 Siguen pendientes la configuración y revisión de IAM para esa identidad de
 producción, la validación en Vercel y los controles contra abuso (límites de
@@ -858,11 +861,282 @@ producción descritas arriba.
 6. Revisar la configuración y el enrutamiento en Vercel antes de autorizar una
    publicación futura. Las pruebas con mocks no validan IAM ni credenciales reales.
 
-El botón de correo sigue deshabilitado. No se implementó AWS SES ni se conectó
-el frontend a este endpoint. No se desplegaron funciones ni se cambiaron reglas.
+Al cerrar 04.2, el botón de correo seguía deshabilitado y no se había implementado
+AWS SES. El avance local de 04.3 se detalla al final; el endpoint de lectura
+conserva su contrato. No se desplegaron funciones ni se cambiaron reglas.
 
 Referencias oficiales: [Vite y Functions en Vercel](https://vercel.com/docs/frameworks/frontend/vite),
 [Firebase Admin](https://firebase.google.com/docs/admin/setup) y
 [verificación de tokens y revocación](https://firebase.google.com/docs/auth/admin/manage-sessions).
 Para la siguiente etapa: [ADC local con impersonación](https://docs.cloud.google.com/docs/authentication/set-up-adc-local-dev-environment)
 y [OIDC de Vercel con Google Cloud](https://vercel.com/docs/oidc/gcp).
+
+## Hito 04.3A: contratos y preparación segura del correo
+
+Base conservada de la subetapa anterior, desarrollada sin envíos ni cambios de
+interfaz. En 04.3 se reutiliza para conectar el endpoint y el adaptador descritos
+en el siguiente apartado. No se incorporan registros persistentes,
+infraestructura ni cambios de credenciales.
+
+`server/authenticated-user.ts` centraliza Bearer y `verifyIdToken(token, true)`.
+Conserva los códigos, mensajes y comportamiento del endpoint de lectura; sus
+headers de caché siguen establecidos en `api/summary.ts` antes de autenticar.
+La identidad es inmutable y opaca para TypeScript. Su procedencia se comprueba
+también en runtime, con referencias emitidas por el verificador; no se puede
+reconstruir a partir de JSON, un UID o un objeto enviado por el cliente. No retiene
+tokens y debe usarse dentro de la petición que la obtiene; no se serializa ni persiste.
+
+`server/summary-recipient.ts` recibe esa identidad y consulta `getUser(uid)`.
+Requiere cuenta habilitada, correo presente con sintaxis admitida y
+`emailVerified === true`. El destinatario procede del registro actual de Auth,
+incluso cuando el token tiene otro email o un estado de verificación antiguo.
+Nunca recibe una dirección de destino del cliente. La validación admite un
+subconjunto conservador de direcciones ASCII, incluido plus addressing y dominios
+punycode; no admite listas, nombres de presentación, controles o inyección de headers.
+Los errores tipados tienen mensajes fijos, sin dirección, UID ni detalles del SDK.
+
+`shared/summary-send.types.ts` define un contrato inicial de aceptación para envío
+(`accepted`, requestId) y errores. No afirma entrega al buzón. El endpoint de
+envío utiliza este contrato; la resolución del destinatario es solo servidor.
+
+`server/summary-email.ts` es una función pura que genera asunto fijo, texto y HTML
+desde TaskSummary, sin consultar servicios ni modificar tareas, totales, progreso
+u orden. Escapa contenido no confiable y no interpreta HTML o Markdown. Conserva
+los saltos de línea de descripciones en el HTML mediante `<br>` después del escape.
+El límite es 256 KiB combinados de texto y HTML en bytes UTF-8, después de renderizar;
+no cuenta el asunto fijo. Rechaza el exceso con EMAIL_TOO_LARGE, sin devolver
+contenido parcial ni incluir contenido privado en el error. Los límites de lectura
+de 100 tareas y 1 MiB continúan en el servicio de resumen existente.
+
+Pruebas sin credenciales reales cubren autenticación y procedencia de la identidad,
+email ausente/no verificado/cambiado, cuenta deshabilitada, destinatarios fabricados,
+errores privados, contenido malicioso, Unicode y el límite exacto de tamaño.
+La regresión incluye aislamiento de usuarios y contrato HTTP del endpoint existente.
+
+La subetapa 04.3A no activó ni simuló entrega de correos. Los pendientes actuales
+se detallan a continuación.
+
+## Hito 04.3: envío manual de resúmenes (código local)
+
+Implementado y probado con Firebase y SES simulados. No se realizó ningún envío
+real, no se configuraron credenciales ni se modificó infraestructura. Tampoco se
+validó este flujo en Vercel Cloud. La aceptación técnica local no demuestra
+recepción del correo ni cumplimiento operativo en producción.
+
+### Flujo y responsabilidades
+
+1. `SummaryPage` reutiliza `SummaryView` y `useSummarySend`. El usuario inicia
+   cada envío explícitamente; montar la página o iniciar sesión no envía nada.
+2. `summary-send.api.ts` comprueba la sesión actual, obtiene un ID token vigente
+   mediante `getIdToken()` y hace un único POST a `/api/summary/send`.
+3. `api/summary/send.ts` valida método, Bearer y petición. Autentica mediante
+   `authenticated-user.ts` (`verifyIdToken(token, true)`, incluida revocación).
+4. `send-summary.ts` coordina configuración, protección local, destinatario
+   actual de `getUser(uid)`, lectura real de `task-summary.ts` y renderizado puro.
+5. `ses.ts` encapsula `SESv2Client` y `SendEmailCommand`: formato Simple,
+   asunto fijo, cuerpos UTF-8 de texto y HTML, remitente de servidor y un único
+   To. No utiliza CC/BCC, contenido del cliente ni llamadas HTTP internas.
+
+AWS SDK solo se importa desde `server/`; los contratos compartidos son tipos.
+La inicialización es diferida y usa la cadena estándar de credenciales del SDK,
+sin claves hardcodeadas ni lectura explícita de archivos personales.
+`POST /api/summary` conserva su comportamiento de consulta, sin enviar correo.
+
+### Contrato HTTP
+
+`POST /api/summary/send` requiere `Authorization: Bearer <ID token>` y
+`Idempotency-Key: <UUID v4>`. El body debe estar ausente/vacío o ser `{}`.
+Se rechazan parámetros de query y cualquier campo del body (incluidos UID,
+email, remitente, tareas o HTML). El cliente no tiene autoridad sobre estos datos.
+Se limita el cuerpo original a 1024 bytes, midiendo el stream binario intacto
+antes de parsearlo. `Content-Length` solo permite rechazar temprano: también se
+compara con los bytes recibidos. Chunked se mide igualmente. No se consulta
+`req.body`, ni se estima el tamaño mediante `JSON.stringify` de un objeto parseado.
+Un stream previamente leído, terminado, abortado, con encoding de texto o sin
+bytes originales verificables se rechaza con 400; no se consume una segunda vez.
+Un objeto preparseado solo puede coexistir con una solicitud válida si se conserva
+un stream original intacto: la autoridad siguen siendo sus bytes, no el objeto.
+Los errores de lectura y EOF incompleto devuelven 400 sin llegar al envío.
+
+El cuerpo ausente admite ausencia de `Content-Type`. Cuando hay contenido, solo
+se admite `application/json`, opcionalmente con `charset=utf-8` (también entre
+comillas y sin distinguir mayúsculas). Debe contener únicamente `{}`; se permiten
+espacios JSON alrededor del objeto. Solo espacios, JSON malformado, otros tipos,
+charsets, parámetros o campos devuelven 400. Un tipo incompatible también se
+rechaza aunque el cuerpo esté vacío. Se exige UTF-8 válido y no se admite
+compresión. Exceso de bytes devuelve 413, sin procesar contenido parcial.
+
+**Compatibilidad Vercel:** sus helpers pueden consumir el stream antes del
+handler y exponer `body` mediante un getter. El runtime instalado de Vercel CLI
+65.2.0 y `@vercel/node` confirma ese comportamiento. Para este lector es necesario
+arrancar Vercel Dev con `NODEJS_HELPERS=0` en el proceso y su entorno de build,
+antes de inicializar el runtime. `vercel.json` conserva los rewrites e incluye
+`build.env.NODEJS_HELPERS=0`: la CLI toma este ajuste de `meta.buildEnv`, por lo
+que definirlo solo en PowerShell no garantiza desactivar el parser. No contiene
+credenciales ni habilita envío. Los requests JSON ya consumidos por helpers se
+rechazan deliberadamente; no se intenta reconstruir el tamaño perdido. El handler
+de lectura existente usa APIs nativas de Node y no requiere esos helpers.
+No se cambió configuración cloud; cualquier producción futura debe revisar esta
+opción por separado y seguirá sin autorizar envíos.
+Se comprobó además el runtime real instalado en un proceso aislado de loopback:
+con helpers desactivados, el fixture del lector aceptó cuerpo vacío y `{}`
+(200) y rechazó 2050 bytes (413). Con helpers activos, rechazó JSON ya consumido
+(400). Este fixture no importó Firebase ni SES, no habilitó correo y no equivale
+a una prueba autenticada de envío ni a una validación de Vercel Cloud. Los archivos
+temporales utilizados para la comprobación se eliminaron al finalizar.
+
+| HTTP | Resultado |
+| --- | --- |
+| 202 | `{ "status": "accepted", "requestId": "<UUID>" }`: SES confirmó aceptación; no confirma entrega |
+| 400 | Petición, query, body o clave de idempotencia inválidos |
+| 401 | Bearer ausente, inválido, vencido, revocado o cuenta rechazada al verificar |
+| 403 | Cuenta no disponible, email ausente/inválido o no verificado en Auth actual |
+| 405 | Solo POST, con `Allow: POST` |
+| 409 | Envío en curso o clave ya utilizada en una operación fallida |
+| 413 | Petición, resumen o correo demasiado grande; no hay envío parcial |
+| 429 | Espera local entre operaciones; incluye `Retry-After` y `retryAfterSeconds` |
+| 503 | Envío deshabilitado, configuración inválida, despliegue sin control distribuido, proveedor rechazado o resultado incierto |
+| 500 | Fallo interno controlado, sin datos privados ni trazas |
+
+Los errores tienen `{ "error": { "code": "...", "message": "..." } }`.
+Todas las respuestas fijan `Cache-Control: private, no-store`,
+`Vercel-CDN-Cache-Control: no-store` y `X-Content-Type-Options: nosniff`.
+No se devuelven contenido de tareas, destinatarios, tokens ni identificadores SES.
+No se registran credenciales ni contenido privado en logs de aplicación.
+
+### Identidad, contenido y experiencia
+
+Se consulta el registro actual de Firebase Auth en cada operación nueva: debe
+estar habilitado y tener email válido con `emailVerified === true`. Un claim
+antiguo de email no decide el destinatario. El registro puede cambiar después
+de esa consulta: Auth y SES no admiten una transacción conjunta; se utiliza el
+correo verificado obtenido para esa operación, no una garantía de atomicidad
+entre proveedores.
+
+No se agrega un flujo de verificación de correo ni se modifica artificialmente
+`emailVerified`. Las cuentas sin verificar reciben un bloqueo y un mensaje
+específico. Antes de una prueba real se requiere una cuenta de prueba con correo
+verificado mediante el flujo oficial de Firebase autorizado para el proyecto.
+
+Se conservan el orden y los límites de 100 tareas y 1 MiB de lectura. El correo
+incluye totales, progreso y listado completo, escapa HTML y limita texto + HTML
+a 256 KiB UTF-8 después de renderizar. El asunto fijo no depende de las tareas.
+
+La UI representa loading, aceptación y errores mediante estados accesibles;
+deshabilita el botón durante la operación y evita solicitudes simultáneas.
+Al cambiar de usuario limpia el estado y aborta la espera local; abortar el
+cliente **no cancela** un efecto ya iniciado en el servidor. La espera del
+frontend vence a los 30 segundos. No hay envíos automáticos ni reintentos de red.
+Ante `SEND_STATUS_UNKNOWN` o `SEND_IN_PROGRESS` bloquea otro intento en esa vista.
+Recargar no demuestra que la operación anterior haya fallado.
+
+### Idempotencia y límites: alcance local explícito
+
+`summary-send-guard.ts` implementa una abstracción reemplazable con guardia
+en memoria: una operación por UID en curso, 60 segundos de espera tras un
+resultado confirmado y retención de claves durante 24 horas. Repetir una clave
+aceptada devuelve la aceptación anterior sin enviar un correo nuevo. Una clave
+fallida no vuelve a ejecutarse; una operación pendiente o incierta no se expulsa
+por tiempo. Hay un máximo de 1000 registros; al llenarse se rechazan nuevas
+operaciones. No se envían resúmenes parciales ni se promete exactamente un envío.
+
+El SDK usa `maxAttempts: 1`: sin reintentos automáticos, conexión de 3 s y
+solicitud de 10 s con error al superar el plazo. Un timeout, error de red o
+respuesta sin MessageId se trata como **incierto**, no como rechazo definitivo.
+El bloqueo incierto requiere revisión antes de otro intento. Reiniciar el
+proceso pierde la memoria y no resuelve si SES aceptó el envío anterior.
+
+Esta protección **no es distribuida**, no impone una cuota diaria y no sobrevive
+a reinicios. La política pura `summary-email-runtime.ts` bloquea los entornos
+declarados Preview y Production con `DISTRIBUTED_GUARD_REQUIRED`, incluso con el
+flag activado; rechaza estados ausentes, vacíos, desconocidos o contradictorios
+con `SEND_DISABLED`. Se evalúa antes de reservar o consultar destinatario/tareas.
+No se debe retirar ese bloqueo para publicar sin una revisión adicional.
+Una etapa posterior debe autorizar almacenamiento solo servidor y transacciones
+para reservas por UID/clave, cuotas y resolución de resultados inciertos, con
+IAM revisado. No se crearon colecciones ni se modificaron reglas en este hito.
+La alternativa mínima actual sirve únicamente para una prueba local controlada
+en un solo proceso, previa autorización, y no para activar correo en producción.
+
+### Variables y credenciales (sin activación en esta intervención)
+
+| Variable | Uso |
+| --- | --- |
+| `FIREBASE_ADMIN_PROJECT_ID` | Proyecto explícito; ADC de servidor configurado por separado |
+| `SUMMARY_EMAIL_ENABLED=false` | Flag autoritativo de servidor; solo `true` permite continuar en entorno local |
+| `SUMMARY_EMAIL_RUNTIME=disabled` | Opt-in adicional: solo `local-controlled` puede habilitar una prueba local autorizada |
+| `NODEJS_HELPERS=0` | Desactiva helpers de Vercel para conservar los bytes originales; no habilita correo |
+| `AWS_SES_REGION` | Región donde se verificó la identidad de SES |
+| `SES_FROM_EMAIL` | Dirección única de remitente verificada en SES; nunca proviene del cliente |
+| `VITE_SUMMARY_EMAIL_ENABLED=false` | Disponibilidad visual pública; no habilita el backend por sí misma |
+
+Los valores por defecto mantienen el envío desactivado. No se modificó
+`.env.local`. Cambiar el flag Vite requiere reiniciar el dev server o reconstruir
+el frontend; los flags de servidor se configuran solo en el proceso servidor.
+No usar `VITE_` para credenciales AWS ni Firebase Admin.
+
+El único estado ALLOW de la política exige **todos** estos valores exactos:
+`SUMMARY_EMAIL_ENABLED=true`, `SUMMARY_EMAIL_RUNTIME=local-controlled`,
+`VERCEL=1`, `VERCEL_ENV=development`, `NODE_ENV=development`, `NODEJS_HELPERS=0`.
+`VERCEL_TARGET_ENV` puede estar ausente; si está presente debe ser `development`.
+Además, región y remitente deben ser válidos. No basta `NODE_ENV=development`,
+el flag aislado ni la ausencia de variables Vercel. El código instalado de la
+CLI confirma que Vercel Dev fija `VERCEL=1` y `VERCEL_ENV=development`; el resto
+debe configurarse explícitamente para la prueba autorizada. No se establecieron
+valores ALLOW en ningún proceso con dependencias reales durante este parche.
+
+Esto es una política de **configuración**, no una atestación del host: un operador
+que copie intencionalmente todos los valores locales a un despliegue podría
+imitarlo. IAM y el control de infraestructura deben impedir que despliegues no
+autorizados reciban credenciales capaces de enviar. Esa garantía externa no se
+ha verificado ni modificado aquí. No publicar credenciales ni activar flags en
+Preview/Production. El flag de UI no cambia ninguna de estas restricciones.
+
+Preparación local sin habilitar correo (solo tras revisar el entorno): conservar
+`build.env.NODEJS_HELPERS=0` del `vercel.json` versionable y definir en la misma
+sesión de PowerShell `NODEJS_HELPERS=0` y `NODE_ENV=development`,
+conservar `SUMMARY_EMAIL_ENABLED=false` y `SUMMARY_EMAIL_RUNTIME=disabled`, y
+reiniciar Vercel Dev con `vercel dev --listen 3000`. No usar `vercel env pull`
+para este ajuste: no hace falta tocar `.env.local` ni la configuración remota.
+La habilitación posterior del único estado ALLOW y la identidad AWS requieren
+autorización separada. No se ejecuta ni se recomienda activar ese estado ahora.
+
+Para desarrollo futuro, usar una identidad AWS autorizada de corta duración y
+la cadena de proveedores estándar (por ejemplo un perfil externo al repositorio
+con sesión SSO), sin versionar archivos de credenciales. Para Vercel, evaluar
+OIDC con rol limitado a proyecto/entorno y `ses:SendEmail` sobre la identidad
+SES autorizada, restringiendo remitente y región. El token OIDC de Vercel **no se
+integra automáticamente** solo por crear un SESv2Client: requerirá configurar la
+federación y un proveedor de credenciales temporal, probarlo y revisar IAM.
+La identidad Firebase Admin en producción también sigue pendiente.
+
+En SES sandbox tanto remitente como destinatario deben cumplir la verificación
+de SES; `emailVerified` de Firebase no sustituye esa autorización de SES.
+No solicitar salida de sandbox ni crear identidades, roles o claves sin revisión.
+
+### Pruebas y validación real pendiente
+
+Ejecutar `npm test`, `npm run test:backend`, `npm run typecheck`, `npm run lint`,
+`npm run build` y, con Java 21 disponible, `npm run test:rules`.
+Las pruebas del adaptador sustituyen el SDK o inyectan transporte; las del flujo
+completo simulan Auth, Firestore y correo. Ninguna necesita acceso AWS ni realiza
+envíos. Se cubren identidad y destinatario actuales, entradas maliciosas,
+caché, tamaño, concurrencia, incertidumbre, errores y estados de UI.
+La configuración backend de Vitest no carga archivos de entorno.
+
+Antes de una prueba real: revisar el diff, autorizar identidad/credenciales
+temporales e IAM mínimo, configurar remitente y región SES, comprobar sandbox y
+usar una cuenta de prueba propia con email verificado en ambos sistemas cuando
+corresponda. Solo con autorización explícita habilitar temporalmente los flags
+en un único proceso local de Vercel Dev; hacer un clic manual, comprobar 202 y
+recepción, y volver a deshabilitar. No repetir automáticamente ante incertidumbre.
+No registrar tokens en consola, archivos, historial ni capturas.
+Vercel Cloud requiere además el control distribuido descrito arriba antes de
+autorizar un envío o un despliegue con correo habilitado.
+
+Referencias: [SES SendEmail](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html),
+[cadena de credenciales de AWS SDK v3](https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/setting-credentials-node.html),
+[sandbox SES](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html)
+y [OIDC de Vercel con AWS](https://vercel.com/docs/oidc/aws).
+La política de lectura sigue la [desactivación oficial de helpers Node](https://vercel.com/docs/functions/runtimes/node-js/advanced-node-configuration)
+y el [comportamiento del helper body](https://vercel.com/docs/functions/runtimes/node-js).

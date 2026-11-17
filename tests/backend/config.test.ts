@@ -1,6 +1,11 @@
 import { readFile } from 'node:fs/promises'
 import { expect, it } from 'vitest'
 
+it('desactiva helpers en el entorno de build real que utiliza Vercel Dev para conservar bytes crudos', async () => {
+  const config = JSON.parse(await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')) as { build: { env: Record<string, string> } }
+  expect(config.build.env).toEqual({ NODEJS_HELPERS: '0' })
+})
+
 async function fallbackPattern() {
   const config = JSON.parse(await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')) as { rewrites: { source: string; destination: string }[] }
   expect(config.rewrites).toHaveLength(1)
@@ -21,7 +26,7 @@ it('no captura módulos Vite, recursos, API ni rutas ajenas a la lista SPA', asy
   const pattern = await fallbackPattern()
   for (const path of ['/src/main.tsx', '/@vite/client', '/@react-refresh', '/@id/react', '/@fs/example',
     '/node_modules', '/node_modules/', '/node_modules/.vite/deps/react.js',
-    '/api', '/api/', '/api/summary', '/api/summary/', '/api/unknown',
+    '/api', '/api/', '/api/summary', '/api/summary/', '/api/summary/send', '/api/summary/send/', '/api/unknown',
     '/assets/index.js', '/favicon.svg', '/index.html', '/tareas/extra', '/desconocida']) {
     expect(pattern.test(path), path).toBe(false)
   }

@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { useAuth } from '../auth/useAuth'
 import { useTasks } from '../tasks/useTasks'
 import SummaryView from './SummaryView'
+import { useSummarySend } from './useSummarySend'
 
 function SummaryContent({ email, onRetry }: { email: string | null; onRetry: () => void }) {
   const { tasks, loading, error } = useTasks()
-  return <SummaryView tasks={tasks} loading={loading} error={error} email={email} onRetry={onRetry} />
+  const send = useSummarySend()
+  return <SummaryView tasks={tasks} loading={loading} error={error} email={email} onRetry={onRetry} send={send} />
 }
 
 export default function SummaryPage() {

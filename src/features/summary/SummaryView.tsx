@@ -10,9 +10,10 @@ type SummaryViewProps = {
   error: string | null
   email: string | null
   onRetry: () => void
+  send?: { available: boolean; pending: boolean; disabled: boolean; message: string; error: boolean; send: () => void }
 }
 
-export default function SummaryView({ tasks, loading, error, email, onRetry }: SummaryViewProps) {
+export default function SummaryView({ tasks, loading, error, email, onRetry, send }: SummaryViewProps) {
   const pending = tasks.filter(task => task.status === 'pending').length
   const completed = tasks.length - pending
   const progress = tasks.length === 0 ? 0 : Math.round(completed / tasks.length * 100)
@@ -44,8 +45,9 @@ export default function SummaryView({ tasks, loading, error, email, onRetry }: S
             <h2 id="summary-email-title">Tu resumen por correo</h2>
             <p>Podrás enviar el estado actual de todas tus tareas al correo de tu cuenta.</p>
             {email ? <p className="summary__email"><span>Correo de tu cuenta</span><strong>{email}</strong></p> : <p>No hay un correo disponible en tu cuenta.</p>}
-            <Button disabled aria-describedby="summary-email-availability">Enviar resumen a mi correo</Button>
-            <p id="summary-email-availability" className="summary__availability">Disponible próximamente. El envío de correos todavía no está habilitado.</p>
+            <Button disabled={!send || send.disabled || loading || !!error} aria-busy={send?.pending || undefined} aria-describedby="summary-email-availability" onClick={() => { void send?.send() }}>{send?.pending ? 'Solicitando envío…' : 'Enviar resumen a mi correo'}</Button>
+            <p id="summary-email-availability" className="summary__availability">{send ? send.available ? 'Se enviará únicamente al correo verificado de tu cuenta.' : 'El envío de correos está deshabilitado en este entorno.' : 'Disponible próximamente. El envío de correos todavía no está habilitado.'}</p>
+            {send?.message && <p role={send.error ? 'alert' : 'status'}>{send.message}</p>}
           </Card>
         </section>
       </div>
