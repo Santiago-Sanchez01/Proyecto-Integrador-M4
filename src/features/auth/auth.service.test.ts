@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import { createUserWithEmailAndPassword, GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut } from 'firebase/auth'
 import type { User } from 'firebase/auth'
 import { getFirebaseAuth } from '../../lib/firebase'
-import { login, logout, observeSession, register } from './auth.service'
+import { login, loginWithGoogle, logout, observeSession, register } from './auth.service'
 
 vi.mock('../../lib/firebase', () => ({ getFirebaseAuth: vi.fn() }))
-vi.mock('firebase/auth', () => ({ createUserWithEmailAndPassword: vi.fn(), onAuthStateChanged: vi.fn(), signInWithEmailAndPassword: vi.fn(), signOut: vi.fn() }))
+vi.mock('firebase/auth', () => ({
+  createUserWithEmailAndPassword: vi.fn(),
+  GoogleAuthProvider: class GoogleAuthProvider {},
+  onAuthStateChanged: vi.fn(),
+  signInWithEmailAndPassword: vi.fn(),
+  signInWithPopup: vi.fn(),
+  signOut: vi.fn(),
+}))
 
 const auth = {} as ReturnType<typeof getFirebaseAuth>
 
@@ -15,6 +22,11 @@ beforeEach(() => {
 })
 
 describe('Servicio oficial de autenticación', () => {
+  it('usa el popup de Firebase con el proveedor Google y la instancia Auth compartida', async () => {
+    await loginWithGoogle()
+    expect(signInWithPopup).toHaveBeenCalledExactlyOnceWith(auth, expect.any(GoogleAuthProvider))
+  })
+
   it('envía registro y login a las operaciones modulares de Firebase', async () => {
     await register('persona@example.com', 'clave-de-prueba')
     expect(createUserWithEmailAndPassword).toHaveBeenCalledWith(auth, 'persona@example.com', 'clave-de-prueba')

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import { useAuth } from './useAuth'
-import { login, register } from './auth.service'
+import { login, loginWithGoogle, register } from './auth.service'
 import { authErrorMessage } from './auth.errors'
 
 type AuthFormProps = { mode: 'login' | 'register' }
@@ -13,7 +13,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
   const isRegister = mode === 'register'
   const { status, error: sessionError } = useAuth()
   const { state } = useLocation()
-  const [pending, setPending] = useState(false)
+  const [pendingMethod, setPendingMethod] = useState<'password' | 'google' | null>(null)
+  const pending = pendingMethod !== null
   const inFlight = useRef(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -28,6 +29,23 @@ export default function AuthForm({ mode }: AuthFormProps) {
   function clearFeedback(field: keyof Errors) {
     setErrors(current => ({ ...current, [field]: undefined, ...(field === 'password' ? { confirmation: undefined } : {}) }))
     setMessage('')
+  }
+
+  async function authenticate(method: 'password' | 'google', request: () => Promise<void>) {
+    if (inFlight.current || status !== 'ready') return
+    inFlight.current = true
+    setPendingMethod(method)
+    setMessage(method === 'google' ? 'Conectando con Google…' : isRegister ? 'Creando tu cuenta…' : 'Iniciando sesión…')
+    try {
+      await request()
+      setPassword('')
+      setConfirmation('')
+      // The observer confirms the session and GuestRoute performs navigation.
+    } catch (error) {
+      setMessage(authErrorMessage(error, method))
+      setPendingMethod(null)
+      inFlight.current = false
+    }
   }
 
   return (
@@ -55,24 +73,20 @@ export default function AuthForm({ mode }: AuthFormProps) {
           else confirmationRef.current?.focus()
           return
         }
-        inFlight.current = true
-        setPending(true)
-        setMessage(isRegister ? 'Creando tu cuenta…' : 'Iniciando sesión…')
-        try {
-          await (isRegister ? register : login)(email.trim(), password)
-          setPassword('')
-          setConfirmation('')
-          // The observer confirms the session and GuestRoute performs navigation.
-        } catch (error) {
-          setMessage(authErrorMessage(error))
-          setPending(false)
-          inFlight.current = false
-        }
+        await authenticate('password', () => (isRegister ? register : login)(email.trim(), password))
       }}>
         <Input ref={emailRef} disabled={pending || status !== 'ready'} label="Email" name="email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required value={email} error={errors.email} onChange={event => { setEmail(event.target.value); clearFeedback('email') }} />
         <Input ref={passwordRef} disabled={pending || status !== 'ready'} label="Contraseña" name="password" type="password" autoComplete={isRegister ? 'new-password' : 'current-password'} required minLength={isRegister ? 8 : undefined} value={password} helpText={isRegister ? 'Usá al menos 8 caracteres.' : undefined} error={errors.password} onChange={event => { setPassword(event.target.value); clearFeedback('password') }} />
         {isRegister && <Input ref={confirmationRef} disabled={pending || status !== 'ready'} label="Confirmar contraseña" name="confirmation" type="password" autoComplete="new-password" required value={confirmation} error={errors.confirmation} onChange={event => { setConfirmation(event.target.value); clearFeedback('confirmation') }} />}
-        <Button className="auth-submit" type="submit" disabled={pending || status !== 'ready'}>{pending ? (isRegister ? 'Creando cuenta…' : 'Iniciando sesión…') : title}</Button>
+        <Button className="auth-submit" type="submit" disabled={pending || status !== 'ready'}>{pendingMethod === 'password' ? (isRegister ? 'Creando cuenta…' : 'Iniciando sesión…') : title}</Button>
+        {!isRegister && (
+          <Button className="auth-submit" type="button" variant="secondary" disabled={pending || status !== 'ready'} onClick={() => {
+            setErrors({})
+            void authenticate('google', loginWithGoogle)
+          }}>
+            {pendingMethod === 'google' ? 'Conectando con Google…' : 'Continuar con Google'}
+          </Button>
+        )}
       </form>
       <p className="auth-feedback" role="status">{sessionError ?? message}</p>
       {status === 'error' && <Button variant="secondary" onClick={() => window.location.reload()}>Reintentar</Button>}

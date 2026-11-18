@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../app/App'
 import { login, observeSession, register } from './auth.service'
 
-vi.mock('./auth.service', () => ({ observeSession: vi.fn(), login: vi.fn(), register: vi.fn(), logout: vi.fn() }))
+vi.mock('./auth.service', () => ({ observeSession: vi.fn(), login: vi.fn(), register: vi.fn(), loginWithGoogle: vi.fn(), logout: vi.fn() }))
 
 beforeEach(() => {
   vi.clearAllMocks()

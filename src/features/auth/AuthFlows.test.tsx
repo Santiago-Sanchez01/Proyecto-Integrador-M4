@@ -4,11 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../app/App'
-import { login, logout, observeSession, register } from './auth.service'
+import { login, loginWithGoogle, logout, observeSession, register } from './auth.service'
 import type { SessionUser } from './auth.service'
 import { authDestination } from './auth.destination'
 
-vi.mock('./auth.service', () => ({ observeSession: vi.fn(), login: vi.fn(), register: vi.fn(), logout: vi.fn() }))
+vi.mock('./auth.service', () => ({ observeSession: vi.fn(), login: vi.fn(), register: vi.fn(), loginWithGoogle: vi.fn(), logout: vi.fn() }))
 vi.mock('../tasks/useTasks', () => ({ useTasks: () => ({ tasks: [], loading: false, error: null }) }))
 vi.mock('../tasks/useTaskFocus', () => ({ useTaskFocus: () => ({ focusTaskId: null, loading: false, error: null }) }))
 
@@ -44,6 +44,41 @@ async function fillForm(isRegister = false) {
 }
 
 describe('Sesión y rutas', () => {
+  it('inicia con Google sin validar el formulario y espera el UID del observador', async () => {
+    renderApp('/resumen?vista=actual#estado')
+    act(() => sessionChanged(null))
+    let resolvePopup!: () => void
+    vi.mocked(loginWithGoogle).mockReturnValue(new Promise<void>(resolve => { resolvePopup = resolve }))
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar con Google' }))
+    expect(loginWithGoogle).toHaveBeenCalledTimes(1)
+    expect(login).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Conectando con Google…' })).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent('Conectando con Google')
+    await act(async () => resolvePopup())
+    expect(screen.getByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument()
+    act(() => sessionChanged({ ...userSession, uid: 'google-user' }))
+    expect(await screen.findByRole('heading', { name: 'Mi resumen' })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/resumen?vista=actual#estado')
+  })
+
+  it.each([
+    ['auth/popup-closed-by-user', 'Se cerró la ventana de Google'],
+    ['auth/popup-blocked', 'El navegador bloqueó la ventana de Google'],
+    ['auth/operation-not-allowed', 'El acceso con Google no está habilitado'],
+    ['auth/invalid-credential', 'No pudimos iniciar sesión con esa cuenta de Google'],
+    ['auth/account-exists-with-different-credential', 'Ya existe una cuenta con ese email'],
+  ])('explica %s y vuelve a habilitar ambos métodos', async (code, message) => {
+    renderApp()
+    act(() => sessionChanged(null))
+    vi.mocked(loginWithGoogle).mockRejectedValue({ code })
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar con Google' }))
+    expect(screen.getByRole('status')).toHaveTextContent(message)
+    expect(screen.getByRole('status')).not.toHaveTextContent(code)
+    expect(screen.getByRole('button', { name: 'Continuar con Google' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeEnabled()
+  })
+
   it('espera al observador y restaura la sesión sin pasar por login', async () => {
     renderApp('/tareas')
     expect(screen.getByRole('status')).toHaveTextContent('Restaurando tu sesión')
