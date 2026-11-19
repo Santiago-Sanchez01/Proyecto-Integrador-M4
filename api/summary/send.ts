@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { authenticateUser, AuthenticationError } from '../../server/authenticated-user'
-import { RecipientResolutionError } from '../../server/summary-recipient'
-import { SummaryEmailTooLargeError } from '../../server/summary-email'
-import { SummaryTooLargeError } from '../../server/task-summary'
-import { readSummarySendRequest, SendRequestTooLargeError } from '../../server/summary-send-request'
-import { sendSummary } from '../../server/send-summary'
-import { SummarySendFailure } from '../../server/summary-send-errors'
+import { authenticateUser, AuthenticationError } from '../../server/authenticated-user.js'
+import { RecipientResolutionError } from '../../server/summary-recipient.js'
+import { SummaryEmailTooLargeError } from '../../server/summary-email.js'
+import { SummaryTooLargeError } from '../../server/task-summary.js'
+import { readSummarySendRequest, SendRequestTooLargeError } from '../../server/summary-send-request.js'
+import { sendSummary } from '../../server/send-summary.js'
+import { SummarySendFailure } from '../../server/summary-send-errors.js'
 import type { SummarySendError } from '../../shared/summary-send.types'
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {

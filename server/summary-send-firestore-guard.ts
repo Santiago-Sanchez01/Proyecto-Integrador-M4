@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { Firestore, Transaction } from 'firebase-admin/firestore'
-import { SummarySendFailure } from './summary-send-errors'
+import { SummarySendFailure } from './summary-send-errors.js'
 import type { Outcome, PersistentSummarySendGuard } from './summary-send-guard'
 
 const COLLECTION = 'summarySendControl'

@@ -2,7 +2,7 @@ import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app'
 import type { App } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { Firestore, getFirestore } from 'firebase-admin/firestore'
-import { createVercelFirebaseCredentials } from './firebase-admin-oidc'
+import { createVercelFirebaseCredentials } from './firebase-admin-oidc.js'
 
 const APP_NAME = 'workspace-server'
 const federatedFirestore = new WeakMap<App, Firestore>()

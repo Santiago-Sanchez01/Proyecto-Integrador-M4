@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'node:http'
 import { TextDecoder } from 'node:util'
-import { SummarySendFailure } from './summary-send-errors'
+import { SummarySendFailure } from './summary-send-errors.js'
 
 export const MAX_SEND_REQUEST_BYTES = 1024
 export class SendRequestTooLargeError extends Error {

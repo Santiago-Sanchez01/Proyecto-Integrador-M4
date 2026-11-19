@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { SummaryError, SummaryErrorCode } from '../shared/summary.types'
-import { authenticateUser, AuthenticationError } from '../server/authenticated-user'
-import { MAX_SUMMARY_BYTES, readTaskSummary, SummaryTooLargeError } from '../server/task-summary'
+import { authenticateUser, AuthenticationError } from '../server/authenticated-user.js'
+import { MAX_SUMMARY_BYTES, readTaskSummary, SummaryTooLargeError } from '../server/task-summary.js'
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
