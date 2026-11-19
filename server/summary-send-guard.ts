@@ -1,4 +1,4 @@
-import { SummarySendFailure } from './summary-send-errors'
+import { SummarySendFailure } from './summary-send-errors.js'
 
 type Outcome = 'accepted' | 'failed' | 'unknown'
 export type SummarySendGuard = { begin: (uid: string, requestId: string) => 'reserved' | 'accepted'; finish: (uid: string, requestId: string, outcome: Outcome) => void }

@@ -1,6 +1,6 @@
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2'
 import type { RenderedSummaryEmail } from './summary-email'
-import { SummarySendFailure } from './summary-send-errors'
+import { SummarySendFailure } from './summary-send-errors.js'
 
 export type SummaryMailer = { send: (to: string, content: RenderedSummaryEmail) => Promise<void> }
 type SesTransport = { send: (command: SendEmailCommand) => Promise<{ MessageId?: string }> }

@@ -1,6 +1,6 @@
 import type { SummarySendErrorCode } from '../shared/summary-send.types'
-import { getAdminAuth } from './firebase-admin'
-import { getAuthenticatedUid } from './authenticated-user'
+import { getAdminAuth } from './firebase-admin.js'
+import { getAuthenticatedUid } from './authenticated-user.js'
 import type { AuthenticatedUser } from './authenticated-user'
 
 type RecipientErrorCode = Extract<SummarySendErrorCode, 'ACCOUNT_UNAVAILABLE' | 'EMAIL_UNAVAILABLE' | 'EMAIL_NOT_VERIFIED' | 'INTERNAL_ERROR'>

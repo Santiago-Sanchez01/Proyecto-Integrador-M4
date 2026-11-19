@@ -1,6 +1,6 @@
 import { FieldPath, Timestamp } from 'firebase-admin/firestore'
 import type { SummaryTask, TaskSummary } from '../shared/summary.types'
-import { getAdminFirestore } from './firebase-admin'
+import { getAdminFirestore } from './firebase-admin.js'
 
 export const MAX_SUMMARY_TASKS = 100
 export const MAX_SUMMARY_BYTES = 1024 * 1024

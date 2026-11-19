@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'node:http'
 import type { SummaryErrorCode } from '../shared/summary.types'
-import { getAdminAuth } from './firebase-admin'
+import { getAdminAuth } from './firebase-admin.js'
 
 type AuthenticationErrorCode = Extract<SummaryErrorCode, 'UNAUTHENTICATED' | 'INVALID_TOKEN' | 'INTERNAL_ERROR'>
 const messages: Record<AuthenticationErrorCode, string> = {
