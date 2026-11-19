@@ -7,6 +7,17 @@ elegir qué atender primero y consultar su progreso desde el teléfono o la comp
 
 **Demo pública** · [workspace-m4.vercel.app](https://workspace-m4.vercel.app)
 
+## Cómo probar Workspace
+
+1. Abrí la [demo pública](https://workspace-m4.vercel.app).
+2. Registrate con tu correo y contraseña, o iniciá sesión con tu cuenta o con Google.
+3. En **Mis tareas**, usá **Nueva tarea** para crear dos tareas de prueba.
+4. Editá el título de una tarea y marcala como completada. Eliminá la otra.
+5. Recargá **Mis tareas** y comprobá que se mantengan el título y el estado de la primera tarea, y que la eliminada siga ausente.
+6. Volvé a marcar la tarea restante como pendiente. En **Mi Jornada**, seleccionala como tarea en foco.
+7. Abrí **Mi Resumen** y revisá los totales y el progreso de tus tareas.
+8. Cerrá sesión e intentá abrir `/tareas`, `/jornada` o `/resumen` directamente. Workspace debe llevarte al inicio de sesión.
+
 ## Funcionalidades
 
 - **Acceso personal.** Registro e inicio de sesión con email y contraseña, acceso con Google, cierre de sesión y rutas protegidas.
@@ -109,7 +120,20 @@ Vercel publica `main` con el preset Vite, Node.js 24 según `package.json` y el 
 
 - **SPA.** El desarrollador comprobó en un iPhone real el acceso con email y contraseña, la navegación, las tareas persistidas, la creación y eliminación de tareas y el diseño responsive. También reportó un inicio de sesión exitoso con Google en escritorio. El smoke de entrega comprobó la respuesta pública de las rutas.
 - **Functions de resumen.** El hotfix `67e0eb9` restauró la carga de ambas rutas en Production. En el smoke público, `/api/summary` y `/api/summary/send` devolvieron HTTP `405` para GET y `401` para POST sin token Firebase. La lectura autenticada con Firebase Admin se verificó en el Preview de integración y sigue pendiente en Production. Mi Resumen y el CRUD utilizan el SDK Web de Firestore.
-- **Amazon SES.** La rama `feat/summary-email-cloud-integration` contiene el desarrollo de backend para la guarda distribuida y la federación. El operador validó Firebase Admin OIDC y AWS STS con HTTP 200 en Preview. También recibió un correo enviado manualmente desde AWS Console. El envío originado en Workspace sigue pendiente de validación y permanece deshabilitado en Production.
+
+### Amazon SES
+
+El flujo previsto comienza en **Enviar resumen a mi correo**, en **Mi
+Resumen**. La Vercel Function valida el token de Firebase, consulta las tareas
+del usuario autenticado, genera el resumen y lo envía al correo verificado de
+esa cuenta mediante AWS SES v2. Las credenciales AWS se usan exclusivamente
+en el servidor. La cuenta de prueba está en SES Sandbox, donde las pruebas
+con buzones reales requieren un remitente y un destinatario verificados. [Restricciones de SES Sandbox](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html)
+
+El operador confirmó la recepción de un correo enviado manualmente desde
+AWS Console. En el Preview de integración también verificó Firebase Admin
+OIDC y AWS STS con HTTP `200`. **El envío desde Workspace sigue pendiente
+de validación y permanece deshabilitado en Production.**
 
 ## Uso de IA
 
