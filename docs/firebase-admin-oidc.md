@@ -55,6 +55,22 @@ del proveedor, independientemente de la audiencia del JWT emitido por Vercel.
 El runtime no requiere claves JSON, archivos ADC ni un token OIDC configurado
 como variable en Vercel. En desarrollo, omitir el modo o elegir `adc`.
 
+## Compatibilidad del runtime
+
+Vercel desactiva por defecto `require(ESM)`. Firebase Admin 14.5.1 usa
+`jwks-rsa@4.1.0`, que carga JOSE con `require()`. El override de npm
+limita JOSE 5.10.0 a ese consumidor para conservar la carga CommonJS y la
+conversión de claves públicas. Esta versión queda fuera del rango publicado
+por `jwks-rsa@4.1.0` (`^6.1.3`). La compatibilidad se verificó con estas
+versiones exactas. Revisar el override al actualizar las dependencias y
+retirarlo cuando una versión compatible supere el smoke test del artefacto:
+
+```powershell
+node --no-experimental-require-module tests/backend/vercel-artifact-smoke.mjs .vercel/output
+```
+
+[Compatibilidad ESM de Vercel](https://vercel.com/docs/functions/runtimes/node-js/advanced-node-configuration#experimental-node.js-require()-of-es-module)
+
 ## Permisos y verificación
 
 - La validación criptográfica del ID token usa el proyecto Firebase y las
