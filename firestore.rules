@@ -52,6 +52,7 @@ service cloud.firestore {
       }
     }
 
+    // summarySendControl and its subcollections are backend-only.
     match /{document=**} {
       allow read, write: if false;
     }

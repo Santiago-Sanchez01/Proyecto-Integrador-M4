@@ -103,6 +103,39 @@ Firebase Auth. Firebase Admin aplica la autorización en el servidor y su
 identidad debe contar con los permisos mínimos. Las credenciales de Admin
 y AWS se mantienen del lado servidor.
 
+## Guarda distribuida de correo
+
+La modalidad local controlada conserva la guarda en memoria por defecto.
+`SUMMARY_EMAIL_GUARD=firestore` selecciona, solo dentro de un runtime ya
+autorizado, transacciones de Firebase Admin en `summarySendControl`. El
+envío sigue bloqueado en Preview y Production.
+
+La guarda reserva por hash de UID y clave, y persiste el inicio antes de
+contactar SES. Una reserva anterior al inicio vence a los 60 segundos.
+Su propietario anterior pierde el derecho a iniciar. Un inicio abandonado
+se trata como incierto al vencer ese plazo y permanece bloqueado para revisión.
+Las claves aceptadas reproducen el resultado sin enviar otro correo. Las
+claves con fallo confirmado se rechazan. Los registros terminales carecen de
+TTL automático para conservar la idempotencia.
+
+Las reservas consumen cuota aunque fallen o se abandonen. Los valores por día
+UTC son 2 por UID y 24 globales, configurables con
+`SUMMARY_EMAIL_DAILY_UID_LIMIT` (1–10) y
+`SUMMARY_EMAIL_DAILY_GLOBAL_LIMIT` (4–100). La capacidad global se divide entre
+cuatro documentos. Cada UID usa una partición estable, por lo que puede
+agotarse su capacidad con cupo disponible en otra. La suma nunca excede el
+límite con la misma configuración en todas las instancias. Estos contadores
+distribuyen la contención para el volumen esperado. Mantener límites uniformes
+y aplicar cambios de configuración con el envío deshabilitado.
+
+La guarda necesita permisos Admin adicionales `datastore.entities.create`,
+`datastore.entities.update` y `datastore.databases.get` para abrir o revertir
+transacciones, además de lectura. Las reglas vigentes
+deniegan acceso web a estos registros. Antes de usar la guarda en un entorno
+desplegado quedan pendientes la identidad de servidor, el alcance IAM para
+escrituras, la reconciliación operativa de estados inciertos y una activación
+controlada independiente de los flags actuales.
+
 ## Estado de la demo
 
 - **Verificado en un iPhone real por el desarrollador.** Acceso con email y contraseña, navegación entre secciones, visualización de tareas persistidas, creación y eliminación, y experiencia responsive.

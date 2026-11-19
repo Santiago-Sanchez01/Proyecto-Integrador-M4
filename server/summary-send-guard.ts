@@ -1,7 +1,25 @@
 import { SummarySendFailure } from './summary-send-errors'
 
-type Outcome = 'accepted' | 'failed' | 'unknown'
+export type Outcome = 'accepted' | 'failed' | 'unknown'
 export type SummarySendGuard = { begin: (uid: string, requestId: string) => 'reserved' | 'accepted'; finish: (uid: string, requestId: string, outcome: Outcome) => void }
+
+export type SummarySendReservation = {
+  start(): Promise<void>
+  finish(outcome: Outcome): Promise<void>
+}
+
+export type PersistentSummarySendGuard = {
+  reserve(uid: string, requestId: string): Promise<'accepted' | SummarySendReservation>
+}
+
+export async function reserveSummarySend(guard: SummarySendGuard | PersistentSummarySendGuard, uid: string, requestId: string): Promise<'accepted' | SummarySendReservation> {
+  if ('reserve' in guard) return guard.reserve(uid, requestId)
+  if (guard.begin(uid, requestId) === 'accepted') return 'accepted'
+  return {
+    async start() {},
+    async finish(outcome: Outcome) { guard.finish(uid, requestId, outcome) },
+  }
+}
 
 /** Local process only. Never claim cross-instance idempotency or persist this state. */
 export function createMemorySendGuard(now = Date.now, maxEntries = 1000): SummarySendGuard {
