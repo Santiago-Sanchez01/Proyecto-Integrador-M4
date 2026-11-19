@@ -109,3 +109,27 @@ it('anuncia la carga y evita solicitudes simultáneas', async () => {
   expect(await screen.findByText(/Acceso al resumen verificado/)).toHaveTextContent('HTTP 200')
   expect(button()).toBeEnabled()
 })
+
+it('verifica AWS con la sesión, sin enviar UID ni mostrar datos de STS', async () => {
+  fetchMock.mockResolvedValue(Response.json({ ok: true, Arn: 'private-arn', uid }))
+  render(<SummaryOidcCheck uid={uid} kind="aws" />)
+  await userEvent.click(screen.getByRole('button', { name: 'Verificar conexión AWS' }))
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/summary/aws-check', {
+    method: 'POST', headers: { Authorization: `Bearer ${token}` },
+    credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: expect.any(AbortSignal),
+  })
+  expect(screen.getByRole('status')).toHaveTextContent('Identidad AWS verificada. HTTP 200')
+  expect(screen.getByRole('status')).not.toHaveTextContent(/private-/)
+})
+
+it.each([
+  [403, { error: { code: 'FORBIDDEN', details: token } }, 'FORBIDDEN'],
+  [502, { error: { code: token } }, 'UNEXPECTED_RESPONSE'],
+  [200, { ok: false }, 'UNEXPECTED_RESPONSE'],
+])('muestra solo el resultado público de AWS para HTTP %i', async (status, body, code) => {
+  fetchMock.mockResolvedValue(Response.json(body, { status }))
+  render(<SummaryOidcCheck uid={uid} kind="aws" />)
+  await userEvent.click(screen.getByRole('button', { name: 'Verificar conexión AWS' }))
+  expect(screen.getByRole('status')).toHaveTextContent(`HTTP ${status} ${code}`)
+  expect(screen.getByRole('status')).not.toHaveTextContent(token)
+})

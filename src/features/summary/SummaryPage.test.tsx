@@ -30,6 +30,7 @@ beforeEach(() => {
 it('recibe actualizaciones del listener y recalcula listado y progreso sin escribir', () => {
   const view = render(<MemoryRouter><SummaryPage /></MemoryRouter>)
   expect(screen.queryByRole('button', { name: 'Verificar acceso al resumen' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Verificar conexión AWS' })).not.toBeInTheDocument()
   expect(screen.getByRole('status')).toHaveTextContent('Cargando tu resumen')
   act(() => listeners[0].next([task('primera'), task('segunda')]))
   expect(screen.getByRole('progressbar')).toHaveAttribute('value', '0')

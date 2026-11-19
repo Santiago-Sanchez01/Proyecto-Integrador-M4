@@ -13,7 +13,7 @@ const output = resolve(process.argv[2])
 const { publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
 const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'smoke', alg: 'RS256', use: 'sig' }
 
-for (const route of ['api/summary', 'api/summary/send']) {
+for (const route of ['api/summary', 'api/summary/send', 'api/summary/aws-check']) {
   const directory = join(output, 'functions', `${route}.func`)
   const config = JSON.parse(await readFile(join(directory, '.vc-config.json'), 'utf8'))
   assert.equal(config.runtime, 'nodejs24.x')
@@ -33,10 +33,23 @@ for (const route of ['api/summary', 'api/summary/send']) {
   assert.equal(keys[0].kid, 'smoke')
   assert.equal(keys[0].getPublicKey(), publicKey.export({ type: 'spki', format: 'pem' }))
 
-  for (const [method, status, code] of [
+  const awsCheck = route === 'api/summary/aws-check'
+  if (awsCheck) Object.assign(process.env, {
+    VERCEL: '1', VERCEL_PROJECT_NAME: 'workspace-m4',
+    VERCEL_GIT_COMMIT_REF: 'feat/summary-email-cloud-integration',
+    AWS_STS_DIAGNOSTIC_ALLOWED_UID: 'smoke-fixture-uid',
+  })
+
+  const requests = [
     ['GET', 405, 'METHOD_NOT_ALLOWED'],
     ['POST', 401, 'UNAUTHENTICATED'],
-  ]) {
+  ]
+  if (awsCheck) requests.push(['POST', 404, 'DIAGNOSTIC_DISABLED'])
+  for (const [method, status, code] of requests) {
+    if (awsCheck) {
+      process.env.VERCEL_ENV = status === 404 ? 'production' : 'preview'
+      process.env.VERCEL_TARGET_ENV = process.env.VERCEL_ENV
+    }
     const headers = new Map()
     let body
     const response = {
