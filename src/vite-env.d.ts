@@ -1,3 +1,5 @@
+declare const __SUMMARY_OIDC_PREVIEW__: boolean
+
 interface ImportMetaEnv {
   readonly VITE_FIREBASE_API_KEY?: string
   readonly VITE_FIREBASE_AUTH_DOMAIN?: string
