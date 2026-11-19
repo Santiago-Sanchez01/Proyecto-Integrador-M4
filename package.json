@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1170.0",
+    "@aws-sdk/credential-provider-web-identity": "3.972.90",
     "@vercel/oidc": "4.0.9",
     "firebase": "^13.3.0",
     "firebase-admin": "^14.5.1",

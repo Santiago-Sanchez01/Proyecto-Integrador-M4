@@ -1,14 +1,20 @@
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2'
 import type { RenderedSummaryEmail } from './summary-email'
 import { SummarySendFailure } from './summary-send-errors.js'
+import { sesCredentialProvider } from './ses-credentials.js'
 
 export type SummaryMailer = { send: (to: string, content: RenderedSummaryEmail) => Promise<void> }
 type SesTransport = { send: (command: SendEmailCommand) => Promise<{ MessageId?: string }> }
 const rejected = new Set(['MessageRejected', 'BadRequestException', 'MailFromDomainNotVerifiedException', 'AccountSuspendedException', 'SendingPausedException', 'TooManyRequestsException', 'LimitExceededException'])
 
 export function createSesMailer(region: string, fromEmail: string, transport?: SesTransport): SummaryMailer {
-  // Default credential provider chain. No credentials are resolved at module import.
-  const client = transport ?? new SESv2Client({ region, maxAttempts: 1, requestHandler: { connectionTimeout: 3000, requestTimeout: 10_000, throwOnRequestTimeout: true } })
+  const credentials = transport ? undefined : sesCredentialProvider(region)
+  const client = transport ?? new SESv2Client({
+    region,
+    maxAttempts: 1,
+    requestHandler: { connectionTimeout: 3000, requestTimeout: 10_000, throwOnRequestTimeout: true },
+    ...(credentials && { credentials, ignoreConfiguredEndpointUrls: true }),
+  })
   return {
     async send(to, content) {
       try {
