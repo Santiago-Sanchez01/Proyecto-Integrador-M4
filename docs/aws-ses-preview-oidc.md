@@ -68,6 +68,48 @@ El `200` valida la identidad en STS. La entrega de correo y los permisos
 de envío de SES requieren comprobaciones independientes.
 [Referencia de GetCallerIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html)
 
+## Evidencia de entrega
+
+El operador obtuvo HTTP 200 al consultar el resumen con Firebase Admin OIDC
+en Preview. También obtuvo HTTP 200 al validar la identidad AWS por STS
+en el Preview del commit `6d289a1`.
+También confirmó la recepción de un correo enviado desde AWS Console en
+`us-east-2`. Quedan pendientes la autorización efectiva de `ses:SendEmail`
+para el rol Preview y la recepción de un resumen originado en Workspace.
+
+La ruta actual de envío rechaza Preview y Production antes de reservar
+o contactar SES. Activar los flags no habilita el runtime cloud. El cliente
+de envío omite cookies, así que un futuro Preview protegido deberá conservar
+las cookies del mismo origen sin sustituir el token Firebase.
+
+## Envío de prueba pendiente de autorización
+
+1. Limitar la prueba al Preview protegido de integración y a un UID por
+   allowlist. Comparar en el servidor el correo verificado de Firebase
+   con el único buzón de prueba autorizado. Verificar remitente y destino
+   en SES Sandbox de la misma región. Confirmar por lectura el permiso
+   `ses:SendEmail` del rol sobre el remitente y la restricción al destinatario
+   antes de autorizar la prueba.
+   [Restricciones de SES Sandbox](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html)
+   [Controles IAM de SES](https://docs.aws.amazon.com/ses/latest/dg/control-user-access.html)
+2. Preparar una autorización temporal específica en el servidor,
+   deshabilitada por defecto y con vencimiento. Mantener obligatoria la
+   guarda Firestore. Usar un único ID de operación fijado por el servidor
+   para todos los intentos y un ámbito de contadores exclusivo. El
+   `requestId` de respuesta conserva el contrato del cliente. La variante
+   normal usa `summarySendControl` y consume una partición global aun con
+   un UID de prueba. En la misma base real, un ámbito separado solo
+   separa rutas y contadores a nivel de código. La cuenta Admin conserva
+   permisos de escritura sobre el resto de la base. La prueba de hoy
+   queda en el emulador mientras ese riesgo y la autorización sigan
+   sin resolver.
+3. Tras revisión y autorización explícita, ejecutar un solo envío.
+   Registrar HTTP 202 como aceptación, comprobar recepción en el buzón
+   autorizado y cerrar la autorización. Ante un resultado incierto,
+   conservar la reserva y reconciliar antes de repetir. Production
+   queda fuera de este flujo y requiere identidades Google Cloud y AWS
+   propias, guardas validadas y un plan de recuperación independiente.
+
 ### Retirada
 
 Quitar `AWS_STS_DIAGNOSTIC_ALLOWED_UID` de Preview. Eliminar

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import type { Firestore, Transaction } from 'firebase-admin/firestore'
+import type { DocumentReference, Firestore, Transaction } from 'firebase-admin/firestore'
 import { SummarySendFailure } from './summary-send-errors.js'
 import type { Outcome, PersistentSummarySendGuard } from './summary-send-guard'
 
@@ -30,8 +30,9 @@ export function readSummarySendQuotas(env: NodeJS.ProcessEnv): Quotas {
   }
 }
 
-export function createFirestoreSummarySendGuard(db: Firestore, quotas: Quotas): PersistentSummarySendGuard {
-  const control = db.collection(COLLECTION)
+export function createFirestoreSummarySendGuard(scope: Firestore | DocumentReference, quotas: Quotas): PersistentSummarySendGuard {
+  const db = 'firestore' in scope ? scope.firestore : scope
+  const control = scope.collection(COLLECTION)
 
   async function atomic<T>(execute: (transaction: Transaction) => Promise<T>) {
     try { return await db.runTransaction(execute) }

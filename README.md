@@ -71,7 +71,7 @@ autorizadas en el entorno local.
 | Ámbito | Variables y finalidad |
 | --- | --- |
 | Firebase Web | `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` y `VITE_FIREBASE_APP_ID` conectan el navegador con Firebase. |
-| Interfaz de correo | `VITE_SUMMARY_EMAIL_ENABLED=false` mantiene oculto el control de envío. |
+| Interfaz de correo | `VITE_SUMMARY_EMAIL_ENABLED=false` mantiene deshabilitado el control de envío. |
 | Firebase Admin | `FIREBASE_ADMIN_PROJECT_ID` identifica el proyecto. El SDK obtiene su identidad de ADC en el servidor. |
 | Política de correo | `SUMMARY_EMAIL_ENABLED=false` y `SUMMARY_EMAIL_RUNTIME=disabled` bloquean el envío. |
 | HTTP y SES | `NODEJS_HELPERS=0` conserva el cuerpo HTTP para validarlo antes de procesarlo. `AWS_SES_REGION` y `SES_FROM_EMAIL` identifican la región y el remitente de una prueba local autorizada. |
@@ -91,7 +91,11 @@ como referencia de configuración.
 | `npm run test:rules` | Reglas y operaciones sobre el emulador de Firestore | 74 pruebas |
 | `npm run build` | Build de producción | Aprobado |
 
-**Total: 566 pruebas aprobadas.**
+**Total en la línea base de `main`: 566 pruebas.** La validación local de la
+rama de integración, con el diagnóstico de la guarda aún sin publicar,
+aprobó 675 pruebas (216 frontend, 373 backend y 86 Firestore Emulator).
+También pasaron typecheck, lint, los builds de Preview y Production y el
+smoke de las cuatro Functions empaquetadas en Node 24.
 
 ## Seguridad
 
@@ -139,9 +143,9 @@ controlada independiente de los flags actuales.
 ## Estado de la demo
 
 - **Verificado en un iPhone real por el desarrollador.** Acceso con email y contraseña, navegación entre secciones, visualización de tareas persistidas, creación y eliminación, y experiencia responsive.
-- **Google.** Implementado y probado con mocks. Queda pendiente confirmar una autenticación real en la demo y verificar la configuración de proveedor y dominios.
-- **Firebase Admin.** La identidad de producción para el endpoint autenticado sigue pendiente de validar. La SPA consulta Firestore mediante el SDK Web.
-- **Amazon SES.** Se verificó un envío manual desde AWS Console. El envío desde Workspace sigue pendiente de validación real. La aplicación publicada mantiene el envío deshabilitado.
+- **Google.** El operador validó el inicio de sesión en navegador de escritorio.
+- **Firebase Admin.** El operador obtuvo HTTP 200 en la consulta autenticada del resumen en Preview, con Firebase Admin OIDC. La SPA consulta Firestore mediante el SDK Web. La identidad de producción del endpoint autenticado sigue pendiente de validar.
+- **AWS.** El operador obtuvo HTTP 200 en el diagnóstico STS de Preview y recibió un correo enviado desde AWS Console en `us-east-2`. El envío de extremo a extremo desde Workspace sigue pendiente. El correo continúa deshabilitado en Preview y Production. [Evidencia y plan de validación](docs/aws-ses-preview-oidc.md)
 
 ## Uso de IA
 

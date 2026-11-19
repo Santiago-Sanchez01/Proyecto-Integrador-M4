@@ -3,11 +3,12 @@ import { readFile } from 'node:fs/promises'
 import { assertFails, initializeTestEnvironment } from '@firebase/rules-unit-testing'
 import type { RulesTestEnvironment } from '@firebase/rules-unit-testing'
 import { deleteApp, initializeApp } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
+import { Firestore, getFirestore } from 'firebase-admin/firestore'
 import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore'
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { authenticateUser } from '../../server/authenticated-user'
 import { getAdminAuth } from '../../server/firebase-admin'
+import { runGuardCheck } from '../../server/firestore-guard-check'
 import { createSendSummary } from '../../server/send-summary'
 import { SummarySendFailure } from '../../server/summary-send-errors'
 import { createFirestoreSummarySendGuard, readSummarySendQuotas } from '../../server/summary-send-firestore-guard'
@@ -191,3 +192,28 @@ it('usa cuotas restrictivas y rechaza configuraciones inválidas', () => {
   expect(() => readSummarySendQuotas({ SUMMARY_EMAIL_DAILY_GLOBAL_LIMIT: '3' })).toThrow(code('SEND_DISABLED'))
   expect(() => readSummarySendQuotas({ SUMMARY_EMAIL_DAILY_UID_LIMIT: '2.5' })).toThrow(code('SEND_DISABLED'))
 })
+
+it('ejecuta todos los escenarios por REST en una base nombrada, aislando contadores y reintentos', async () => {
+  const db = new Firestore({ projectId, databaseId: 'workspace-guard-diagnostics', preferRest: true })
+  const original = getFirestore(apps[0])
+  const task = original.doc('users/emulator-test/tasks/untouched')
+  try {
+    await task.set({ sentinel: true })
+    await expect(runGuardCheck(original)).rejects.toThrow('Guard diagnostic assertion failed')
+    const before = (await db.collection('summaryGuardDiagnosticRuns').listDocuments()).length
+    await runGuardCheck(db)
+    await runGuardCheck(db)
+
+    const runs = await db.collection('summaryGuardDiagnosticRuns').listDocuments()
+    expect(runs).toHaveLength(before + 2)
+    for (const doc of runs) {
+      expect((await doc.collection('cases').doc('rollback').get()).exists).toBe(false)
+    }
+    expect((await db.collection('summarySendControl').get()).empty).toBe(true)
+    expect((await original.collection('summarySendControl').get()).empty).toBe(true)
+    expect((await original.collection('summaryGuardDiagnosticRuns').listDocuments())).toHaveLength(0)
+    expect((await task.get()).data()).toEqual({ sentinel: true })
+  } finally {
+    await db.terminate()
+  }
+}, 90_000)

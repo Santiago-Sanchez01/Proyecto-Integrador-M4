@@ -13,7 +13,7 @@ const output = resolve(process.argv[2])
 const { publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
 const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'smoke', alg: 'RS256', use: 'sig' }
 
-for (const route of ['api/summary', 'api/summary/send', 'api/summary/aws-check']) {
+for (const route of ['api/summary', 'api/summary/send', 'api/summary/aws-check', 'api/summary/guard-check']) {
   const directory = join(output, 'functions', `${route}.func`)
   const config = JSON.parse(await readFile(join(directory, '.vc-config.json'), 'utf8'))
   assert.equal(config.runtime, 'nodejs24.x')
@@ -34,19 +34,27 @@ for (const route of ['api/summary', 'api/summary/send', 'api/summary/aws-check']
   assert.equal(keys[0].getPublicKey(), publicKey.export({ type: 'spki', format: 'pem' }))
 
   const awsCheck = route === 'api/summary/aws-check'
-  if (awsCheck) Object.assign(process.env, {
+  const guardCheck = route === 'api/summary/guard-check'
+  const previewCheck = awsCheck || guardCheck
+  if (previewCheck) Object.assign(process.env, {
     VERCEL: '1', VERCEL_PROJECT_NAME: 'workspace-m4',
     VERCEL_GIT_COMMIT_REF: 'feat/summary-email-cloud-integration',
     AWS_STS_DIAGNOSTIC_ALLOWED_UID: 'smoke-fixture-uid',
+  })
+  if (guardCheck) Object.assign(process.env, {
+    FIREBASE_ADMIN_CREDENTIAL_MODE: 'vercel-oidc', FIREBASE_ADMIN_PROJECT_ID: 'workspace-m4',
+    FIRESTORE_GUARD_CHECK_ALLOWED_UID: 'smoke-fixture-uid',
+    FIRESTORE_GUARD_CHECK_PROJECT_ID: 'workspace-guard-smoke',
+    FIRESTORE_GUARD_CHECK_DATABASE_ID: 'workspace-guard-diagnostics',
   })
 
   const requests = [
     ['GET', 405, 'METHOD_NOT_ALLOWED'],
     ['POST', 401, 'UNAUTHENTICATED'],
   ]
-  if (awsCheck) requests.push(['POST', 404, 'DIAGNOSTIC_DISABLED'])
+  if (previewCheck) requests.push(['POST', 404, 'DIAGNOSTIC_DISABLED'])
   for (const [method, status, code] of requests) {
-    if (awsCheck) {
+    if (previewCheck) {
       process.env.VERCEL_ENV = status === 404 ? 'production' : 'preview'
       process.env.VERCEL_TARGET_ENV = process.env.VERCEL_ENV
     }

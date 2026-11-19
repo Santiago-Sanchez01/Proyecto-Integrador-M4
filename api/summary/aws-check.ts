@@ -2,7 +2,8 @@ import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts'
 import type { GetCallerIdentityCommandOutput } from '@aws-sdk/client-sts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { authenticateUser, AuthenticationError } from '../../server/authenticated-user.js'
-import { isSesOidcPreview, PREVIEW_AWS_ACCOUNT, PREVIEW_AWS_ROLE_NAME, sesCredentialProvider } from '../../server/ses-credentials.js'
+import { PREVIEW_AWS_ACCOUNT, PREVIEW_AWS_ROLE_NAME, sesCredentialProvider } from '../../server/ses-credentials.js'
+import { isWorkspaceIntegrationPreview } from '../../server/workspace-preview.js'
 import type { AwsStsCheckErrorCode } from '../../shared/aws-sts-check.types.js'
 
 // The provider uses the role name as its fixed RoleSessionName.
@@ -20,7 +21,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const env = process.env
   const allowedUid = env.AWS_STS_DIAGNOSTIC_ALLOWED_UID
-  if (!isSesOidcPreview(env) || !allowedUid || !allowedUid.trim()
+  if (!isWorkspaceIntegrationPreview(env) || !allowedUid || !allowedUid.trim()
     || allowedUid !== allowedUid.trim() || allowedUid.includes('/') || allowedUid.length > 128) {
     return fail(404, 'DIAGNOSTIC_DISABLED')
   }

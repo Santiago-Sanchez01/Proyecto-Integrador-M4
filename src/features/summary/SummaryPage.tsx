@@ -12,6 +12,7 @@ function SummaryContent({ uid, email, onRetry }: { uid: string | null; email: st
     <SummaryView tasks={tasks} loading={loading} error={error} email={email} onRetry={onRetry} send={send} />
     {__SUMMARY_OIDC_PREVIEW__ && uid && <SummaryOidcCheck uid={uid} />}
     {__SUMMARY_OIDC_PREVIEW__ && uid && <SummaryOidcCheck uid={uid} kind="aws" />}
+    {__SUMMARY_OIDC_PREVIEW__ && uid && <SummaryOidcCheck uid={uid} kind="guard" />}
   </>
 }
 

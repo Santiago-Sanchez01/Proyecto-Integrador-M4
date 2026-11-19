@@ -3,6 +3,7 @@ import Button from '../../components/ui/Button'
 import { getFirebaseAuth } from '../../lib/firebase'
 import type { SummaryErrorCode } from '../../../shared/summary.types'
 import { awsStsCheckErrorCodes } from '../../../shared/aws-sts-check.types'
+import { firestoreGuardCheckErrorCodes } from '../../../shared/firestore-guard-check.types'
 
 type Result = { message: string; status?: number; code?: string }
 const publicCodes: readonly SummaryErrorCode[] = [
@@ -11,7 +12,14 @@ const publicCodes: readonly SummaryErrorCode[] = [
 
 const diagnostics = {
   firebase: { path: '/api/summary', button: 'Verificar acceso al resumen', label: 'Verificación del acceso al resumen', publicCodes },
-  aws: { path: '/api/summary/aws-check', button: 'Verificar conexión AWS', label: 'Verificación de la conexión AWS', publicCodes: awsStsCheckErrorCodes },
+  aws: {
+    path: '/api/summary/aws-check', button: 'Verificar conexión AWS', label: 'Verificación de la conexión AWS',
+    publicCodes: awsStsCheckErrorCodes, success: 'Identidad AWS verificada.', timeout: 15_000,
+  },
+  guard: {
+    path: '/api/summary/guard-check', button: 'Verificar guarda Firestore', label: 'Verificación de la guarda Firestore',
+    publicCodes: firestoreGuardCheckErrorCodes, success: 'Guarda Firestore verificada.', timeout: 60_000,
+  },
 }
 type Diagnostic = keyof typeof diagnostics
 
@@ -48,9 +56,9 @@ async function runCheck(uid: string, signal: AbortSignal, kind: Diagnostic): Pro
       code: diagnostic.publicCodes.find(code => code === data?.error?.code) ?? 'UNEXPECTED_RESPONSE',
     }
   }
-  if (kind === 'aws') {
+  if (kind !== 'firebase') {
     return data?.ok === true
-      ? { message: 'Identidad AWS verificada.', status: 200 }
+      ? { message: diagnostics[kind].success, status: 200 }
       : { message: 'La respuesta no tiene el formato esperado.', status: 200, code: 'UNEXPECTED_RESPONSE' }
   }
   if (typeof data?.user?.uid !== 'string') {
@@ -78,7 +86,7 @@ export default function SummaryOidcCheck({ uid, kind = 'firebase' }: { uid: stri
     request.current = controller
     setPending(true)
     setResult(null)
-    const timeout = setTimeout(() => controller.abort(), 15_000)
+    const timeout = setTimeout(() => controller.abort(), kind === 'firebase' ? 15_000 : diagnostics[kind].timeout)
     try {
       const checked = await runCheck(uid, controller.signal, kind)
       controller.signal.throwIfAborted()

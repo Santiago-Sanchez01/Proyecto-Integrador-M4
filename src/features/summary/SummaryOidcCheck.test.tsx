@@ -133,3 +133,14 @@ it.each([
   expect(screen.getByRole('status')).toHaveTextContent(`HTTP ${status} ${code}`)
   expect(screen.getByRole('status')).not.toHaveTextContent(token)
 })
+
+it('solicita la prueba de la guarda sin enviar un UID, base ni ruta al servidor', async () => {
+  fetchMock.mockResolvedValue(Response.json({ ok: true }))
+  render(<SummaryOidcCheck uid={uid} kind="guard" />)
+  await userEvent.click(screen.getByRole('button', { name: 'Verificar guarda Firestore' }))
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/summary/guard-check', {
+    method: 'POST', headers: { Authorization: `Bearer ${token}` },
+    credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: expect.any(AbortSignal),
+  })
+  expect(screen.getByRole('status')).toHaveTextContent('Guarda Firestore verificada. HTTP 200')
+})
