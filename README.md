@@ -5,15 +5,15 @@
 Workspace ayuda a quienes trabajan en equipo a gestionar sus propias tareas,
 elegir qué atender primero y consultar su progreso desde el teléfono o la computadora.
 
-**Live Demo:** [workspace-m4.vercel.app](https://workspace-m4.vercel.app)
+**Demo pública** · [workspace-m4.vercel.app](https://workspace-m4.vercel.app)
 
 ## Funcionalidades
 
-- **Acceso personal.** Registro e inicio de sesión con email y contraseña, cierre de sesión y rutas protegidas. El cliente también integra el acceso con Google.
+- **Acceso personal.** Registro e inicio de sesión con email y contraseña, acceso con Google, cierre de sesión y rutas protegidas.
 - **Mis tareas.** Creá, editá, filtrá, completá y eliminá tareas. Cloud Firestore guarda los cambios y sincroniza la lista mediante `onSnapshot`.
 - **Mi Jornada.** Elegí una tarea pendiente como foco y consultá el progreso de tu lista.
 - **Mi Resumen.** Revisá tus tareas, totales y avance desde una misma vista.
-- **Diseño responsive y datos privados.** La navegación se adapta a pantallas móviles y de escritorio. Cada cuenta accede a sus tareas mediante su UID.
+- **Diseño responsive y datos privados.** La navegación se adapta a pantallas móviles y de escritorio. Cada cuenta accede a sus tareas mediante su UID. Las vistas informan estados de carga y errores.
 
 ## Stack
 
@@ -24,7 +24,7 @@ elegir qué atender primero y consultar su progreso desde el teléfono o la comp
 | Autenticación | Firebase Authentication |
 | Base de datos | Cloud Firestore |
 | API | Vercel Functions y Firebase Admin |
-| Correo | Amazon SES v2 |
+| Correo | Adaptador Amazon SES v2, con envío deshabilitado |
 | Pruebas | Vitest, React Testing Library y emulador de Firestore |
 | Alojamiento | Vercel |
 
@@ -33,8 +33,8 @@ elegir qué atender primero y consultar su progreso desde el teléfono o la comp
 - **Vistas y componentes** en [`src/app`](src/app), [`src/features`](src/features) y [`src/components`](src/components). El router expone `/login` y `/register`, y protege `/jornada`, `/tareas` y `/resumen`.
 - **Hooks y servicios Web.** `AuthProvider` observa la sesión de Firebase. `useTasks` y `useTaskFocus` conectan las vistas con los servicios Firestore y administran las suscripciones. Mi Resumen obtiene sus datos por esta vía.
 - **Contratos HTTP** en [`shared`](shared). Definen las solicitudes y respuestas compartidas entre el cliente y las Functions.
-- **Functions** en [`api`](api). `POST /api/summary` devuelve los datos del usuario autenticado. `POST /api/summary/send` solicita un envío manual, sujeto a la política de entorno.
-- **Servicios de servidor** en [`server`](server). Firebase Admin verifica el token con control de revocación y consulta Firestore por el UID verificado. El flujo de correo resuelve el destinatario desde la cuenta verificada, renderiza el resumen e invoca el adaptador SES v2.
+- **Functions** en [`api`](api). `POST /api/summary` define la consulta autenticada del resumen. `POST /api/summary/send` define la solicitud de envío, sujeta a la política de entorno. La disponibilidad de ambas rutas en Production se detalla abajo.
+- **Servicios de servidor** en [`server`](server). Firebase Admin verifica el token y su revocación. El código deriva el UID de esa identidad, consulta sus tareas y resuelve el destinatario del correo desde la cuenta verificada. La SPA usa Firebase Web directamente para mostrar Mi Resumen.
 
 ## Instalación local
 
@@ -71,7 +71,7 @@ autorizadas en el entorno local.
 | Ámbito | Variables y finalidad |
 | --- | --- |
 | Firebase Web | `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` y `VITE_FIREBASE_APP_ID` conectan el navegador con Firebase. |
-| Interfaz de correo | `VITE_SUMMARY_EMAIL_ENABLED=false` mantiene oculto el control de envío. |
+| Interfaz de correo | `VITE_SUMMARY_EMAIL_ENABLED=false` mantiene deshabilitado el control de envío. |
 | Firebase Admin | `FIREBASE_ADMIN_PROJECT_ID` identifica el proyecto. El SDK obtiene su identidad de ADC en el servidor. |
 | Política de correo | `SUMMARY_EMAIL_ENABLED=false` y `SUMMARY_EMAIL_RUNTIME=disabled` bloquean el envío. |
 | HTTP y SES | `NODEJS_HELPERS=0` conserva el cuerpo HTTP para validarlo antes de procesarlo. `AWS_SES_REGION` y `SES_FROM_EMAIL` identifican la región y el remitente de una prueba local autorizada. |
@@ -91,7 +91,7 @@ como referencia de configuración.
 | `npm run test:rules` | Reglas y operaciones sobre el emulador de Firestore | 74 pruebas |
 | `npm run build` | Build de producción | Aprobado |
 
-**Total: 566 pruebas aprobadas.**
+**566 pruebas aprobadas sobre `main`**. Las suites de backend usan dobles de servicios y las de Firestore ejecutan el emulador sobre un proyecto demo local. La comprobación HTTP de Production se registra por separado.
 
 ## Seguridad
 
@@ -103,21 +103,25 @@ Firebase Auth. Firebase Admin aplica la autorización en el servidor y su
 identidad debe contar con los permisos mínimos. Las credenciales de Admin
 y AWS se mantienen del lado servidor.
 
-## Estado de la demo
+## Production y limitaciones
 
-- **Verificado en un iPhone real por el desarrollador.** Acceso con email y contraseña, navegación entre secciones, visualización de tareas persistidas, creación y eliminación, y experiencia responsive.
-- **Google.** Implementado y probado con mocks. Queda pendiente confirmar una autenticación real en la demo y verificar la configuración de proveedor y dominios.
-- **Firebase Admin.** La identidad de producción para el endpoint autenticado sigue pendiente de validar. La SPA consulta Firestore mediante el SDK Web.
-- **Amazon SES.** Se verificó un envío manual desde AWS Console. El envío desde Workspace sigue pendiente de validación real. La aplicación publicada mantiene el envío deshabilitado.
+Vercel publica `main` con el preset Vite, Node.js 24 según `package.json` y el build `npm run build` en `dist`. [`vercel.json`](vercel.json) permite abrir directamente las rutas de la SPA. [Configuración de Vite en Vercel](https://vercel.com/docs/frameworks/frontend/vite)
+
+- **SPA.** El desarrollador comprobó en un iPhone real el acceso con email y contraseña, la navegación, las tareas persistidas, la creación y eliminación de tareas y el diseño responsive. También reportó un inicio de sesión exitoso con Google en escritorio. El smoke de entrega comprobó la respuesta pública de las rutas.
+- **Functions de resumen.** En el smoke del commit base `99a1a17`, `/api/summary` y `/api/summary/send` respondieron HTTP 500. Los registros de Production mostraron `ERR_MODULE_NOT_FOUND` al cargar las Functions. Mi Resumen y el CRUD utilizan el SDK Web de Firestore. La identidad de Firebase Admin para Production queda pendiente de validación.
+- **Amazon SES.** La rama `feat/summary-email-cloud-integration` contiene el desarrollo de backend para la guarda distribuida y la federación. El operador validó Firebase Admin OIDC y AWS STS con HTTP 200 en Preview. También recibió un correo enviado manualmente desde AWS Console. El envío originado en Workspace sigue pendiente de validación y permanece deshabilitado en Production.
 
 ## Uso de IA
 
-Codex apoyó la implementación bajo especificaciones, la revisión de arquitectura,
-el diagnóstico de errores y la preparación, ejecución y validación de pruebas.
-La revisión de seguridad produjo regresiones para dos decisiones concretas:
-validar el tamaño del cuerpo HTTP antes de procesarlo y bloquear SES si el
-runtime está desplegado o su configuración es contradictoria. La verificación
-manual en iPhone corresponde al desarrollador.
+El trabajo con Codex se organizó por etapas. Primero se definieron los contratos
+de autenticación y tareas, luego se revisaron los cambios y se ejecutaron pruebas
+de regresión. Esa revisión dejó controles concretos para limitar el cuerpo HTTP,
+derivar el destinatario desde Firebase y bloquear el envío ante una configuración
+contradictoria.
 
-Para la reflexión personal queda documentar una decisión revisada por el
-desarrollador y explicar qué evidencia utilizó para aceptarla o corregirla.
+En integración, Vitest pasó mientras las Functions fallaban al cargar en Vercel.
+Se reprodujeron por separado la resolución de imports ESM y la incompatibilidad
+entre `jwks-rsa` y JOSE, y se comprobó el artefacto empaquetado en Node 24.
+El desarrollador realizó las pruebas en dispositivos y con servicios reales.
+Cada resultado se documentó según lo que demostraba. Esa distinción llevó a
+mantener la experimentación en Preview y el correo deshabilitado en Production.
