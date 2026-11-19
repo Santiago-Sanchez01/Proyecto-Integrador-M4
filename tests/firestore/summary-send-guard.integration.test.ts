@@ -217,3 +217,39 @@ it('ejecuta todos los escenarios por REST en una base nombrada, aislando contado
     await db.terminate()
   }
 }, 90_000)
+
+it('coordina un único envío Preview entre dos clientes con claves HTTP distintas y contadores propios', async () => {
+  const clients = [0, 1].map(() => new Firestore({ projectId, databaseId: '(default)', preferRest: true }))
+  const uid = 'synthetic-preview-user'
+  const send = vi.fn(async () => {})
+  const sender = (db: Firestore) => createSendSummary({
+    configuration: () => ({ runtime: {
+      allowed: true, reason: 'PREVIEW_SINGLE_SEND', uid, recipient: 'recipient@example.invalid',
+      runId: first, expiresAt: Date.now() + 120_000,
+    }, region: 'us-east-2', fromEmail: 'sender@example.invalid' }),
+    recipient: async () => ({ uid, email: 'recipient@example.invalid' }),
+    summary: async requestUid => ({ user: { uid: requestUid }, totals: { total: 0, pending: 0, completed: 0 }, progress: 0, tasks: [] }),
+    render: () => ({ subject: 'Fixture', text: 'Fixture', html: '<p>Fixture</p>' }),
+    mailer: () => ({ send }),
+    guard: { reserve: async () => { throw new Error('Unexpected regular guard') } },
+    previewGuard: runId => ({
+      guard: createFirestoreSummarySendGuard(db.collection('summarySendPreviewRuns').doc(runId), { perUser: 1, global: 4 }),
+      close: async () => {},
+    }),
+  })
+
+  try {
+    const user = await identity(uid)
+    const results = await Promise.allSettled([sender(clients[0])(user, second), sender(clients[1])(user, third)])
+    for (const result of results) {
+      if (result.status === 'rejected') expect(result.reason).toEqual(code('SEND_IN_PROGRESS'))
+      else expect(result.value.status).toBe('accepted')
+    }
+    await expect(sender(clients[1])(user, third)).resolves.toEqual({ status: 'accepted', requestId: third })
+    expect(send).toHaveBeenCalledTimes(1)
+    expect((await clients[0].collection('summarySendControl').get()).empty).toBe(true)
+    expect((await clients[0].collection('summarySendPreviewRuns').doc(first).collection('summarySendControl').get()).size).toBe(2)
+  } finally {
+    await Promise.all(clients.map(db => db.terminate()))
+  }
+}, 60_000)

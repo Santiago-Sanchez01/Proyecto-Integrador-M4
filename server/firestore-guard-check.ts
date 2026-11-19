@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { Firestore } from 'firebase-admin/firestore'
-import { createVercelFirebaseCredentials } from './firebase-admin-oidc.js'
+import type { Firestore } from 'firebase-admin/firestore'
+import { createIsolatedPreviewFirestore } from './preview-firestore.js'
 import { SummarySendFailure } from './summary-send-errors.js'
 import { createFirestoreSummarySendGuard } from './summary-send-firestore-guard.js'
 import type { PersistentSummarySendGuard } from './summary-send-guard.js'
@@ -28,10 +28,7 @@ export function readGuardCheckConfig(env: NodeJS.ProcessEnv) {
 export function createGuardCheckFirestore(config: NonNullable<ReturnType<typeof readGuardCheckConfig>>, env: NodeJS.ProcessEnv) {
   // Auth verification retains its existing credentials. This client impersonates a dedicated
   // account in the isolated project, using the same invocation-scoped Preview WIF provider.
-  const { auth } = createVercelFirebaseCredentials(config.projectId, {
-    ...env, GCP_SERVICE_ACCOUNT_EMAIL: `workspace-guard-preview@${config.projectId}.iam.gserviceaccount.com`,
-  })
-  return new Firestore({ projectId: config.projectId, databaseId: config.databaseId, auth, preferRest: true })
+  return createIsolatedPreviewFirestore(config.projectId, config.databaseId, env)
 }
 
 async function reserve(guard: PersistentSummarySendGuard, uid = fixtureUid, id = first) {

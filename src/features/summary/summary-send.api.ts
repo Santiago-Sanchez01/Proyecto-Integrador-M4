@@ -40,7 +40,7 @@ export async function requestSummarySend(expectedUid: string, requestId: string,
   const timeout = setTimeout(abort, 30_000)
   try {
     const response = await fetch('/api/summary/send', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Idempotency-Key': requestId },
-      credentials: 'omit', cache: 'no-store', redirect: 'error', signal: controller.signal })
+      credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal })
     if (auth.currentUser?.uid !== expectedUid) throw new SummarySendClientError('SESSION_CHANGED')
     const body: unknown = await response.json()
     if (response.status === 202 && body && typeof body === 'object' && 'status' in body && body.status === 'accepted' && 'requestId' in body && body.requestId === requestId) return { status: 'accepted', requestId }

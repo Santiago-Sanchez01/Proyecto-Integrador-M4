@@ -77,10 +77,10 @@ También confirmó la recepción de un correo enviado desde AWS Console en
 `us-east-2`. Quedan pendientes la autorización efectiva de `ses:SendEmail`
 para el rol Preview y la recepción de un resumen originado en Workspace.
 
-La ruta actual de envío rechaza Preview y Production antes de reservar
-o contactar SES. Activar los flags no habilita el runtime cloud. El cliente
-de envío omite cookies, así que un futuro Preview protegido deberá conservar
-las cookies del mismo origen sin sustituir el token Firebase.
+El deployment publicado rechaza el envío en Preview y Production antes de
+reservar o contactar SES. El cambio local prepara un modo temporal cerrado
+por defecto. El cliente conserva la cookie Vercel del mismo origen y sigue
+enviando el ID token de Firebase.
 
 ## Envío de prueba pendiente de autorización
 
@@ -88,27 +88,53 @@ las cookies del mismo origen sin sustituir el token Firebase.
    allowlist. Comparar en el servidor el correo verificado de Firebase
    con el único buzón de prueba autorizado. Verificar remitente y destino
    en SES Sandbox de la misma región. Confirmar por lectura el permiso
-   `ses:SendEmail` del rol sobre el remitente y la restricción al destinatario
-   antes de autorizar la prueba.
+   `ses:SendEmail` del rol sobre la identidad remitente en `us-east-2`.
+   Restringir remitente y todos los destinatarios a las direcciones exactas
+   mediante `ses:FromAddress` y `ses:Recipients`. Limitar también el plazo
+   de la concesión con `aws:CurrentTime` y revisar permisos acumulados.
    [Restricciones de SES Sandbox](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html)
    [Controles IAM de SES](https://docs.aws.amazon.com/ses/latest/dg/control-user-access.html)
-2. Preparar una autorización temporal específica en el servidor,
-   deshabilitada por defecto y con vencimiento. Mantener obligatoria la
-   guarda Firestore. Usar un único ID de operación fijado por el servidor
-   para todos los intentos y un ámbito de contadores exclusivo. El
-   `requestId` de respuesta conserva el contrato del cliente. La variante
-   normal usa `summarySendControl` y consume una partición global aun con
-   un UID de prueba. En la misma base real, un ámbito separado solo
-   separa rutas y contadores a nivel de código. La cuenta Admin conserva
-   permisos de escritura sobre el resto de la base. La prueba de hoy
-   queda en el emulador mientras ese riesgo y la autorización sigan
-   sin resolver.
-3. Tras revisión y autorización explícita, ejecutar un solo envío.
+2. Verificar la base `(default)` en `workspace-guard-m4-2026-alt`. La
+   ruta de envío confina ahí las transacciones del ensayo con la cuenta
+   `workspace-guard-preview@workspace-guard-m4-2026-alt.iam.gserviceaccount.com`.
+   Conceder la impersonación al sujeto Preview del pool existente, mediante
+   `roles/iam.workloadIdentityUser` sobre esa cuenta. El rol de datos
+   requiere `datastore.databases.get`, `datastore.entities.get`,
+   `datastore.entities.create` y `datastore.entities.update` sobre el
+   recurso exacto de esa base. Verificar que la cuenta carezca de permisos
+   directos o heredados sobre Workspace. La cuenta Firebase Admin existente
+   mantiene la verificación con revocación y las lecturas de tareas del
+   UID autenticado.
+   [Permisos de Firestore Native](https://docs.cloud.google.com/firestore/native/docs/security/iam)
+3. Confirmar el despliegue protegido con el correo deshabilitado. La
+   validación autenticada de lectura va primero. Tras autorizar el envío,
+   limitar a la rama Preview las variables de servidor siguientes.
+
+   | Variable | Valor para la única ejecución autorizada |
+   | --- | --- |
+   | `SUMMARY_EMAIL_PREVIEW_UID` | UID exacto de la cuenta Firebase de prueba |
+   | `SUMMARY_EMAIL_PREVIEW_RECIPIENT` | Buzón exacto verificado en Firebase y SES Sandbox |
+   | `SUMMARY_EMAIL_PREVIEW_RUN_ID` | UUID v4 en minúsculas, fijo para toda la ejecución, incluso tras recargar o redesplegar |
+   | `SUMMARY_EMAIL_PREVIEW_EXPIRES_AT` | UTC en formato `YYYY-MM-DDTHH:mm:ssZ`, con hasta 60 minutos de vigencia |
+   | `SUMMARY_EMAIL_GUARD` | `firestore` |
+   | `SUMMARY_EMAIL_RUNTIME` | `preview-single-send` |
+
+   Mantener las variables OIDC y SES existentes, Vercel Authentication y
+   `NODEJS_HELPERS=0`. Los flags `SUMMARY_EMAIL_ENABLED` y
+   `VITE_SUMMARY_EMAIL_ENABLED` solo pueden pasar a true en el Preview
+   autorizado después de verificar los requisitos. El servidor fija la
+   reserva, identidad sintética y los contadores bajo
+   `summarySendPreviewRuns/<UUID>/summarySendControl`. El UUID recibido
+   del navegador se conserva en la respuesta HTTP.
+4. Tras revisión y autorización explícita, ejecutar un solo envío.
    Registrar HTTP 202 como aceptación, comprobar recepción en el buzón
    autorizado y cerrar la autorización. Ante un resultado incierto,
    conservar la reserva y reconciliar antes de repetir. Production
    queda fuera de este flujo y requiere identidades Google Cloud y AWS
    propias, guardas validadas y un plan de recuperación independiente.
+   Conservar el UUID y el registro hasta reconciliar el resultado, incluso
+   si el navegador pierde la respuesta. Quitar los flags y retirar el
+   deployment temporal después de verificar la recepción en Gmail.
 
 ### Retirada
 

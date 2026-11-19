@@ -18,7 +18,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 it('obtiene token vigente y envía solo Authorization e Idempotency-Key, sin cuerpo ni identidad cliente', async () => {
   expect(await requestSummarySend('alice', id)).toEqual({ status: 'accepted', requestId: id })
   expect(token).toHaveBeenCalledExactlyOnceWith()
-  expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/summary/send', { method: 'POST', headers: { Authorization: 'Bearer fake-id-token', 'Idempotency-Key': id }, credentials: 'omit', cache: 'no-store', redirect: 'error', signal: expect.any(AbortSignal) })
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/summary/send', { method: 'POST', headers: { Authorization: 'Bearer fake-id-token', 'Idempotency-Key': id }, credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: expect.any(AbortSignal) })
   expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('body')
 })
 it('no envía si no hay usuario o cambió antes de pedir el token', async () => {
